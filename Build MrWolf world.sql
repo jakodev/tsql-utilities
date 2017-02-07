@@ -12,7 +12,7 @@ provide an automatic mechanism to save to code to rebuild that foreign after thi
 the table shuold be provided by YOU, this utility cannot read your mind ;)
 -- =============================================*/
 
-DECLARE @TableToDrop varchar(50) = '[IntroToEF6].[store].[Orders]'  -- used by FEATURE 1
+DECLARE @TableToDrop varchar(50) = '[IntroToEF6].[store].[OrderDetails]'  -- used by FEATURE 1
 
 -- ##################################################################################################################################################
 --						GLOBAL VARIABLES						
@@ -224,13 +224,15 @@ IF OBJECT_ID(@TableToDrop) is not null
 -- < (2) DROP TABLE		*****************************************************************************************************************************
 
 -- > (3) CREATE TABLE	*****************************************************************************************************************************
-CREATE TABLE [store].[Orders](
+CREATE TABLE [store].[OrderDetails](
 	[Id] [int] IDENTITY(1,1) NOT NULL,
-	[CustomerId] [int] NOT NULL,
-	[OrderDate] [datetime] NOT NULL,
-	[ShipDate] [datetime] NOT NULL,
+	[LineItemTotal] [money]  NULL,
+	[OrderId] [int] NOT NULL,
+	[ProductId] [int] NOT NULL,
+	[Quantity] [int] NOT NULL,
 	[TimeStamp] [timestamp] NOT NULL,
- CONSTRAINT [PK_Orders] PRIMARY KEY CLUSTERED 
+	[UnitCost] [money] NOT NULL,
+ CONSTRAINT [PK_OrderDetails] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
