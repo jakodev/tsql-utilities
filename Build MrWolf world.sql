@@ -12,28 +12,27 @@ provide an automatic mechanism to save to code to rebuild that foreign after thi
 the table shuold be provided by YOU, this utility cannot read your mind ;)
 -- =============================================*/
 
-DECLARE @TableToDrop varchar(50) = '[IntroToEF6].[store].[Categories]'  -- used by FEATURE 1
+DECLARE @TableToDrop varchar(50) = '[IntroToEF6].[store].[Orders]'  -- used by FEATURE 1
 
-
--- ###########################################################################################################################################
+-- ##################################################################################################################################################
 --						GLOBAL VARIABLES						
 /* DON'T TOUCH THESE VARIABLES */											
 DECLARE @schema varchar(50) = '[mrwolf]'
 DECLARE @sql varchar(max)
 DECLARE @function varchar(50) = '[fn_concat_column_names_fk]'
 DECLARE @tbl_scripts varchar(50) = '[tbl_scripts]'
--- ###########################################################################################################################################
+-- ##################################################################################################################################################
 
--- [MRWOLF] SCHEMA CREATION		**************************************************************************************************************
+-- > [MRWOLF] SCHEMA CREATION		*****************************************************************************************************************
 DECLARE @comm_create_schema varchar(50) = 'CREATE SCHEMA {schema}'
 
 SET @sql = @comm_create_schema
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 if SCHEMA_ID(REPLACE(REPLACE(@schema, '[', ''), ']', '')) is null
 	EXEC sp_sqlexec @sql
--- [MRWOLF] SCHEMA CREATION		**************************************************************************************************************
+-- < [MRWOLF] SCHEMA CREATION		*****************************************************************************************************************
 
--- [fn_concat_column_names_fk] FUNCTION CREATION		**************************************************************************************************
+-- > [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
 DECLARE @comm_create_function varchar(max)
 
 SET @comm_create_function =
@@ -96,14 +95,14 @@ SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{function}', @function)
 if OBJECT_ID(@schema +'.'+ @function) is null
 	EXEC sp_sqlexec @sql
+-- < [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
 
-
--- [tbl_scripts] TABLE CREATION		**********************************************************************************************************
+-- > [tbl_scripts] TABLE CREATION		*************************************************************************************************************
 DECLARE @comm_create_table_scripts varchar(max)
 
 SET @comm_create_table_scripts = 
-'CREATE TABLE {schema}.{table} (obj_schema varchar(128) not null, obj_name varchar(128) not null, sql_string varchar(1000) not null, sql_type varchar(50) not null)
-ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (obj_schema, obj_name, sql_type)'
+'CREATE TABLE {schema}.{table} (obj_schema varchar(128) not null, obj_name varchar(128) not null, sql_key varchar(128) not null, sql_string varchar(1000) not null, sql_type varchar(50) not null)
+ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (obj_schema, obj_name, sql_key, sql_type)'
 
 SET @sql = @comm_create_table_scripts
 SET @sql = REPLACE(@sql, '{schema}', @schema)
@@ -112,47 +111,44 @@ SET @sql = REPLACE(@sql, '<schema>', REPLACE(REPLACE(@schema, '[',''), ']',''))
 SET @sql = REPLACE(@sql, '<table>', REPLACE(REPLACE(@tbl_scripts, '[',''), ']',''))
 if OBJECT_ID(@schema +'.'+@tbl_scripts) is null
 	EXEC sp_sqlexec @sql
+-- < [tbl_scripts] TABLE CREATION		*************************************************************************************************************
 
--- ###########################################################################################################################################
+-- ##################################################################################################################################################
 
--- :::::::::::::::::::::::::::::::::::::::::::::::::::::::::FEATURE 1:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+-- > ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: FEATURE 01 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 /*
 FEATURE 1
 Discover all the FK that referencing a table you want to drop, after that
 performs TABLE DROP/CREATE specified in @TableToDrop variable, taking care of its referenced FK. 
 Taking care means: save all the code needed to rebuild these FK after the table creation
 */
-DECLARE @myfkschema varchar(50)
-DECLARE @myfktable varchar(50)
-
-SELECT @myfkschema = '['+OBJECT_SCHEMA_NAME(fk.object_id)+']' FROM sys.foreign_keys fk WHERE fk.referenced_object_id = object_id(@TableToDrop)
-SELECT @myfktable = '['+OBJECT_NAME(fk.parent_object_id)+']' FROM sys.foreign_keys fk WHERE fk.referenced_object_id = object_id(@TableToDrop)
-
--- FK CODE BUILDING AND SAVING (Code for create the foreign keys)
--- (insert the code into the mrwolf.tbl_scripts table)
-INSERT INTO [mrwolf].[tbl_scripts] (obj_schema, obj_name, sql_string, sql_type) 
-SELECT '['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
-,	'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-,	'ALTER TABLE ' + '['+OBJECT_SCHEMA_NAME(fk.object_id)+'].['+ OBJECT_NAME(fk.parent_object_id) + ']' 
-+	' ADD CONSTRAINT ' + '[' + OBJECT_NAME(object_id) + ']'
-+	' FOREIGN KEY(' +   [mrwolf].[fn_concat_column_names_fk](fk.object_id, fk.parent_object_id, 'C') + ')'
-+	' REFERENCES ' + '[' + OBJECT_SCHEMA_NAME(fk.referenced_object_id) + '].[' + OBJECT_NAME(fk.referenced_object_id) + ']' + ' (' + [mrwolf].[fn_concat_column_names_fk](fk.object_id, fk.referenced_object_id, 'P') + ')' 
-+ CASE WHEN fk.update_referential_action_desc != 'NO_ACTION' THEN ' ON UPDATE ' + REPLACE(fk.update_referential_action_desc, '_', ' ') ELSE '' END
-+ CASE WHEN fk.delete_referential_action_desc != 'NO_ACTION' THEN ' ON DELETE ' + REPLACE(fk.delete_referential_action_desc, '_', ' ') ELSE '' END
-as "sql_string"
-, 'FK CREATION' as "sql_type"
+-- > BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
+INSERT INTO [mrwolf].[tbl_scripts] (obj_schema, obj_name, sql_key, sql_string, sql_type) 
+-- query for create foreign keys
+SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
+,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
+,		OBJECT_NAME(OBJECT_ID(@TableToDrop)) as "sql_key"
+,		'ALTER TABLE ' + '['+OBJECT_SCHEMA_NAME(fk.object_id)+'].['+ OBJECT_NAME(fk.parent_object_id) + ']' 
++		' ADD CONSTRAINT ' + '[' + OBJECT_NAME(object_id) + ']'
++		' FOREIGN KEY(' +   [mrwolf].[fn_concat_column_names_fk](fk.object_id, fk.parent_object_id, 'C') + ')'
++		' REFERENCES ' + '[' + OBJECT_SCHEMA_NAME(fk.referenced_object_id) + '].[' + OBJECT_NAME(fk.referenced_object_id) + ']' + ' (' + [mrwolf].[fn_concat_column_names_fk](fk.object_id, fk.referenced_object_id, 'P') + ')' 
++		CASE WHEN fk.update_referential_action_desc != 'NO_ACTION' THEN ' ON UPDATE ' + REPLACE(fk.update_referential_action_desc, '_', ' ') ELSE '' END
++		CASE WHEN fk.delete_referential_action_desc != 'NO_ACTION' THEN ' ON DELETE ' + REPLACE(fk.delete_referential_action_desc, '_', ' ') ELSE '' END as "sql_string"
+,		'ADD_FOREIGN_KEY_CONSTRAINT' as "sql_type"
 FROM sys.foreign_keys fk
-WHERE fk.referenced_object_id = object_id(@TableToDrop)
+WHERE fk.referenced_object_id = OBJECT_ID(@TableToDrop) or fk.parent_object_id = OBJECT_ID(@TableToDrop)
 
--- FK CODE BUILDING AND SAVING (Code for DROP the foreign keys)
--- (insert the code into the mrwolf.tbl_scripts table)
-INSERT INTO [mrwolf].[tbl_scripts] (obj_schema, obj_name, sql_string, sql_type) 
-SELECT   '['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
-,	'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-,	'ALTER TABLE ' + '[' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + ']' + '.[' + OBJECT_NAME(fk.parent_object_id) + '] DROP CONSTRAINT '+fk.name as "sql_string"
-, 'FK DROP' as sql_type
+UNION ALL
+
+-- query for drop foreign keys
+SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
+,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
+,		OBJECT_NAME(OBJECT_ID(@TableToDrop)) as "sql_key"
+,		'ALTER TABLE ' + '[' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + ']' + '.[' + OBJECT_NAME(fk.parent_object_id) + '] DROP CONSTRAINT '+fk.name as "sql_string"
+,		'DROP_FOREIGN_KEY_CONSTRAINT' as sql_type 
 FROM sys.foreign_keys fk
-WHERE referenced_object_id = object_id(@TableToDrop)
+WHERE fk.referenced_object_id = OBJECT_ID(@TableToDrop) or fk.parent_object_id = OBJECT_ID(@TableToDrop)
+-- < BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
 
 /*
 Following code will perform:
@@ -162,36 +158,57 @@ Following code will perform:
 4) RESTORE FOREIGN KEYS : If all gone well, all the fk will be restored by the script saved before, do you rememeber?
 */
 
-/*
+-- > DROP THE FOREIGN KEYS	*************************************************************************************************************************
 -- (1)
--- DROP THE FOREIGN KEYS	******************************************************************************************************************
-SELECT @sql = sql_string FROM [mrwolf].[tbl_scripts] WHERE obj_schema = @myfkschema and obj_name = @myfktable and sql_type = 'FK DROP'
-EXEC sp_sqlexec @sql
--- DROP THE FOREIGN KEYS	******************************************************************************************************************
+--DECLARE @sql_debug varchar(max) = 'SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = ' + OBJECT_ID(@TableToDrop) + ' and sql_type = DROP_FOREIGN_KEY_CONSTRAINT';
+DECLARE sql_drop_fk_cursor CURSOR FOR SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = OBJECT_NAME(OBJECT_ID(@TableToDrop)) and sql_type = 'DROP_FOREIGN_KEY_CONSTRAINT'
 
--- (2)
--- DROP/CREATE TABLE	**********************************************************************************************************************
-DROP TABLE [store].[Categories]
+OPEN sql_drop_fk_cursor
+FETCH NEXT FROM sql_drop_fk_cursor INTO @sql
+WHILE (@@FETCH_STATUS = 0)
+BEGIN
+	EXEC sp_sqlexec @sql
+	FETCH NEXT FROM sql_drop_fk_cursor INTO @sql
+END
+CLOSE sql_drop_fk_cursor
+DEALLOCATE sql_drop_fk_cursor
+-- < DROP THE FOREIGN KEYS	*************************************************************************************************************************
 
--- (3)
-CREATE TABLE [store].[Categories](
+-- > (2) DROP TABLE		*****************************************************************************************************************************
+DECLARE @comm_drop_table varchar(max) = 'DROP TABLE {table}'
+SET @sql = @comm_drop_table
+SET @sql = REPLACE(@sql, '{table}', @TableToDrop)
+IF OBJECT_ID(@TableToDrop) is not null
+	EXEC sp_sqlexec @sql
+-- < (2) DROP TABLE		*****************************************************************************************************************************
+
+-- > (3) CREATE TABLE	*****************************************************************************************************************************
+CREATE TABLE [store].[Orders](
 	[Id] [int] IDENTITY(1,1) NOT NULL,
-	[CategoryName] [nvarchar](50) NULL,
+	[CustomerId] [int] NOT NULL,
+	[OrderDate] [datetime] NULL,
+	[ShipDate] [datetime] NOT NULL,
 	[TimeStamp] [timestamp] NOT NULL,
- CONSTRAINT [PK_Categories] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_Orders] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
--- DROP/CREATE TABLE	**********************************************************************************************************************
+-- < (3) CREATE TABLE	*****************************************************************************************************************************
 
--- (4)
--- CREATE THE SAVED FOREIGN KEYS	**********************************************************************************************************
-SELECT @sql = sql_string FROM [mrwolf].[tbl_scripts] WHERE obj_schema = @myfkschema and obj_name = @myfktable and sql_type = 'FK CREATION'
-EXEC sp_sqlexec @sql
--- CREATE THE SAVED FOREIGN KEYS	**********************************************************************************************************
-*/
+-- > (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
+--DECLARE @sql_debug varchar(max) = 'SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = ' + OBJECT_ID(@TableToDrop) + ' and sql_type = ADD_FOREIGN_KEY_CONSTRAINT';
+DECLARE sql_add_fk_cursor CURSOR FOR SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = OBJECT_NAME(OBJECT_ID(@TableToDrop)) and sql_type = 'ADD_FOREIGN_KEY_CONSTRAINT'
 
-
--- :::::::::::::::::::::::::::::::::::::::::::::::::::::::::FEATURE 1:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+OPEN sql_add_fk_cursor
+FETCH NEXT FROM sql_add_fk_cursor INTO @sql
+WHILE (@@FETCH_STATUS = 0)
+BEGIN
+	EXEC sp_sqlexec @sql
+	FETCH NEXT FROM sql_add_fk_cursor INTO @sql
+END
+CLOSE sql_add_fk_cursor
+DEALLOCATE sql_add_fk_cursor
+-- < (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
+-- > ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: FEATURE 01 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
