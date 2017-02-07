@@ -19,7 +19,8 @@ DECLARE @TableToDrop varchar(50) = '[IntroToEF6].[store].[Orders]'  -- used by F
 /* DON'T TOUCH THESE VARIABLES */											
 DECLARE @schema varchar(50) = '[mrwolf]'
 DECLARE @sql varchar(max)
-DECLARE @function varchar(50) = '[fn_concat_column_names_fk]'
+DECLARE @function varchar(128) = '[fn_concat_column_names_fk]'
+DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_key]'
 DECLARE @tbl_scripts varchar(50) = '[tbl_scripts]'
 -- ##################################################################################################################################################
 
@@ -29,7 +30,10 @@ DECLARE @comm_create_schema varchar(50) = 'CREATE SCHEMA {schema}'
 SET @sql = @comm_create_schema
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 if SCHEMA_ID(REPLACE(REPLACE(@schema, '[', ''), ']', '')) is null
-	EXEC sp_sqlexec @sql
+	BEGIN
+		EXEC sp_sqlexec @sql
+		PRINT 'SCHEMA ' + @schema + ' Has been created!'
+	END
 -- < [MRWOLF] SCHEMA CREATION		*****************************************************************************************************************
 
 -- > [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
@@ -94,8 +98,48 @@ SET @sql = @comm_create_function
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{function}', @function)
 if OBJECT_ID(@schema +'.'+ @function) is null
-	EXEC sp_sqlexec @sql
+	BEGIN
+		EXEC sp_sqlexec @sql
+		PRINT 'FUNCTION ' + @schema + '.' + @function + ' Has been created!'
+	END
 -- < [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
+
+-- > [sp_exec_scripts_by_key] PROCEDURE CREATION		*********************************************************************************************
+SET @comm_create_function =
+'CREATE PROCEDURE {schema}.{procedure}
+(
+	@sql_key varchar(128),
+	@sql_type varchar(50)	
+)
+AS
+
+DECLARE sql_script_cursor CURSOR FOR SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = @sql_key and sql_type = @sql_type
+DECLARE @sql varchar(max)
+
+BEGIN
+
+	OPEN sql_script_cursor
+	FETCH NEXT FROM sql_script_cursor INTO @sql
+	WHILE (@@FETCH_STATUS = 0)
+	BEGIN
+		EXEC sp_sqlexec @sql
+		PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
+		FETCH NEXT FROM sql_script_cursor INTO @sql
+	END
+	CLOSE sql_script_cursor
+	DEALLOCATE sql_script_cursor
+
+END'
+
+SET @sql = @comm_create_function
+SET @sql = REPLACE(@sql, '{schema}', @schema)
+SET @sql = REPLACE(@sql, '{procedure}', @procedure)
+if OBJECT_ID(@schema +'.'+@procedure) is null
+	BEGIN
+		EXEC sp_sqlexec @sql
+		PRINT 'STORED PROCEDURE ' + @schema + '.' + @procedure + ' Has been created!'
+	END
+-- < [sp_exec_scripts_by_key] PROCEDURE CREATION		*********************************************************************************************
 
 -- > [tbl_scripts] TABLE CREATION		*************************************************************************************************************
 DECLARE @comm_create_table_scripts varchar(max)
@@ -110,7 +154,10 @@ SET @sql = REPLACE(@sql, '{table}', @tbl_scripts)
 SET @sql = REPLACE(@sql, '<schema>', REPLACE(REPLACE(@schema, '[',''), ']','')) 
 SET @sql = REPLACE(@sql, '<table>', REPLACE(REPLACE(@tbl_scripts, '[',''), ']',''))
 if OBJECT_ID(@schema +'.'+@tbl_scripts) is null
-	EXEC sp_sqlexec @sql
+	BEGIN
+		EXEC sp_sqlexec @sql
+		PRINT 'TABLE ' + @schema + '.' + @tbl_scripts + ' Has been created!'
+	END
 -- < [tbl_scripts] TABLE CREATION		*************************************************************************************************************
 
 -- ##################################################################################################################################################
@@ -160,18 +207,12 @@ Following code will perform:
 
 -- > DROP THE FOREIGN KEYS	*************************************************************************************************************************
 -- (1)
---DECLARE @sql_debug varchar(max) = 'SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = ' + OBJECT_ID(@TableToDrop) + ' and sql_type = DROP_FOREIGN_KEY_CONSTRAINT';
-DECLARE sql_drop_fk_cursor CURSOR FOR SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = OBJECT_NAME(OBJECT_ID(@TableToDrop)) and sql_type = 'DROP_FOREIGN_KEY_CONSTRAINT'
+SET @sql = 'EXEC {schema}.{procedure} ''{table}'', ''DROP_FOREIGN_KEY_CONSTRAINT'''
+SET @sql = REPLACE(@sql, '{schema}', @schema)
+SET @sql = REPLACE(@sql, '{procedure}', @procedure)
+SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
+EXEC sp_sqlexec @sql
 
-OPEN sql_drop_fk_cursor
-FETCH NEXT FROM sql_drop_fk_cursor INTO @sql
-WHILE (@@FETCH_STATUS = 0)
-BEGIN
-	EXEC sp_sqlexec @sql
-	FETCH NEXT FROM sql_drop_fk_cursor INTO @sql
-END
-CLOSE sql_drop_fk_cursor
-DEALLOCATE sql_drop_fk_cursor
 -- < DROP THE FOREIGN KEYS	*************************************************************************************************************************
 
 -- > (2) DROP TABLE		*****************************************************************************************************************************
@@ -186,7 +227,7 @@ IF OBJECT_ID(@TableToDrop) is not null
 CREATE TABLE [store].[Orders](
 	[Id] [int] IDENTITY(1,1) NOT NULL,
 	[CustomerId] [int] NOT NULL,
-	[OrderDate] [datetime] NULL,
+	[OrderDate] [datetime] NOT NULL,
 	[ShipDate] [datetime] NOT NULL,
 	[TimeStamp] [timestamp] NOT NULL,
  CONSTRAINT [PK_Orders] PRIMARY KEY CLUSTERED 
@@ -197,18 +238,11 @@ CREATE TABLE [store].[Orders](
 -- < (3) CREATE TABLE	*****************************************************************************************************************************
 
 -- > (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
---DECLARE @sql_debug varchar(max) = 'SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = ' + OBJECT_ID(@TableToDrop) + ' and sql_type = ADD_FOREIGN_KEY_CONSTRAINT';
-DECLARE sql_add_fk_cursor CURSOR FOR SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = OBJECT_NAME(OBJECT_ID(@TableToDrop)) and sql_type = 'ADD_FOREIGN_KEY_CONSTRAINT'
-
-OPEN sql_add_fk_cursor
-FETCH NEXT FROM sql_add_fk_cursor INTO @sql
-WHILE (@@FETCH_STATUS = 0)
-BEGIN
-	EXEC sp_sqlexec @sql
-	FETCH NEXT FROM sql_add_fk_cursor INTO @sql
-END
-CLOSE sql_add_fk_cursor
-DEALLOCATE sql_add_fk_cursor
+SET @sql = 'EXEC {schema}.{procedure} ''{table}'', ''ADD_FOREIGN_KEY_CONSTRAINT'''
+SET @sql = REPLACE(@sql, '{schema}', @schema)
+SET @sql = REPLACE(@sql, '{procedure}', @procedure)
+SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
+EXEC sp_sqlexec @sql
 -- < (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
 -- > ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: FEATURE 01 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
