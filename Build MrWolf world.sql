@@ -3,7 +3,7 @@
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last Update: JAN-2017
--- Version:		2.01.00
+-- Version:		2.02.00
 -- Description:	
 Stash in ad hoc new schema called [mrwolf] some, hopefully useful, features to stop arguing with sql server. 
 It comes with extra features appended
@@ -112,18 +112,33 @@ SET @comm_create_function =
 )
 AS
 
-DECLARE sql_script_cursor CURSOR FOR SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = @sql_key and sql_type = @sql_type
+DECLARE sql_script_cursor CURSOR FOR SELECT sql_string, sql_hash FROM [mrwolf].[tbl_scripts] WHERE sql_key = @sql_key and sql_type = @sql_type and sql_status = 0
 DECLARE @sql varchar(max)
+DECLARE @key varchar(50)
 
 BEGIN
-
+	
 	OPEN sql_script_cursor
-	FETCH NEXT FROM sql_script_cursor INTO @sql
+	FETCH NEXT FROM sql_script_cursor INTO @sql, @key
 	WHILE (@@FETCH_STATUS = 0)
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
-		FETCH NEXT FROM sql_script_cursor INTO @sql
+		
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
+			UPDATE [mrwolf].[tbl_scripts] SET sql_status = 1, sql_status_message = ''Success'' WHERE sql_hash = @key
+		END TRY
+		BEGIN CATCH
+			DECLARE @ErrorMessage NVARCHAR(4000);
+			DECLARE @ErrorNumber INT;
+
+			SELECT	@ErrorMessage = ERROR_MESSAGE(),
+					@ErrorNumber = ERROR_NUMBER();
+			
+			UPDATE [mrwolf].[tbl_scripts] SET sql_status = -@ErrorNumber, sql_status_message = @ErrorMessage WHERE sql_hash = @key
+		END CATCH
+		
+		FETCH NEXT FROM sql_script_cursor INTO @sql, @key
 	END
 	CLOSE sql_script_cursor
 	DEALLOCATE sql_script_cursor
@@ -144,8 +159,19 @@ if OBJECT_ID(@schema +'.'+@procedure) is null
 DECLARE @comm_create_table_scripts varchar(max)
 
 SET @comm_create_table_scripts = 
-'CREATE TABLE {schema}.{table} (obj_schema varchar(128) not null, obj_name varchar(128) not null, sql_key varchar(128) not null, sql_string varchar(1000) not null, sql_type varchar(50) not null, sql_hash varchar(100) not null)
-ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (sql_hash)'
+'CREATE TABLE {schema}.{table} 
+	(	obj_schema varchar(128) not null
+	,	obj_name varchar(128) not null
+	,	sql_key varchar(128) not null
+	,	sql_string varchar(1000) not null
+	,	sql_type varchar(50) not null
+	,	sql_hash varchar(100) not null
+	,	sql_status int DEFAULT 0
+	,	sql_status_message varchar(500) DEFAULT ''Not executed yet'')
+ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (sql_hash)
+-- add description about column sql_status
+EXEC sys.sp_addextendedproperty @name=N''MS_Description'', @value=N''0=Never Run; 1=Run Successful; -x=Error code'' , @level0type=N''SCHEMA'',@level0name=N''<schema>'', @level1type=N''TABLE'',@level1name=N''<table>'', @level2type=N''COLUMN'',@level2name=N''sql_status''
+'
 
 SET @sql = @comm_create_table_scripts
 SET @sql = REPLACE(@sql, '{schema}', @schema)
