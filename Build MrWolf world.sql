@@ -1,8 +1,9 @@
-/*-- =============================================
+/*-- ================================================================================================================================================
 -- Name: MRWOLF-UTILITIES
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last Update: JAN-2017
+-- Version:		2.01.00
 -- Description:	
 Stash in ad hoc new schema called [mrwolf] some, hopefully useful, features to stop arguing with sql server. 
 It comes with extra features appended
@@ -10,14 +11,12 @@ It comes with extra features appended
 This first release start with an utility to drop/create a table referenced by one or more foreign key. This code
 provide an automatic mechanism to save to code to rebuild that foreign after thier dropping. Of course the code rebuild
 the table shuold be provided by YOU, this utility cannot read your mind ;)
--- =============================================*/
-
-DECLARE @TableToDrop varchar(50) = '[IntroToEF6].[store].[OrderDetails]'  -- used by FEATURE 1
+-- ================================================================================================================================================*/
 
 -- ##################################################################################################################################################
 --						GLOBAL VARIABLES						
 /* DON'T TOUCH THESE VARIABLES */											
-DECLARE @schema varchar(50) = '[mrwolf]'
+DECLARE @schema varchar(10) = '[mrwolf]'
 DECLARE @sql varchar(max)
 DECLARE @function varchar(128) = '[fn_concat_column_names_fk]'
 DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_key]'
@@ -145,8 +144,8 @@ if OBJECT_ID(@schema +'.'+@procedure) is null
 DECLARE @comm_create_table_scripts varchar(max)
 
 SET @comm_create_table_scripts = 
-'CREATE TABLE {schema}.{table} (obj_schema varchar(128) not null, obj_name varchar(128) not null, sql_key varchar(128) not null, sql_string varchar(1000) not null, sql_type varchar(50) not null)
-ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (obj_schema, obj_name, sql_key, sql_type)'
+'CREATE TABLE {schema}.{table} (obj_schema varchar(128) not null, obj_name varchar(128) not null, sql_key varchar(128) not null, sql_string varchar(1000) not null, sql_type varchar(50) not null, sql_hash varchar(100) not null)
+ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (sql_hash)'
 
 SET @sql = @comm_create_table_scripts
 SET @sql = REPLACE(@sql, '{schema}', @schema)
@@ -162,89 +161,5 @@ if OBJECT_ID(@schema +'.'+@tbl_scripts) is null
 
 -- ##################################################################################################################################################
 
--- > ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: FEATURE 01 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-/*
-FEATURE 1
-Discover all the FK that referencing a table you want to drop, after that
-performs TABLE DROP/CREATE specified in @TableToDrop variable, taking care of its referenced FK. 
-Taking care means: save all the code needed to rebuild these FK after the table creation
-*/
--- > BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
-INSERT INTO [mrwolf].[tbl_scripts] (obj_schema, obj_name, sql_key, sql_string, sql_type) 
--- query for create foreign keys
-SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
-,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-,		OBJECT_NAME(OBJECT_ID(@TableToDrop)) as "sql_key"
-,		'ALTER TABLE ' + '['+OBJECT_SCHEMA_NAME(fk.object_id)+'].['+ OBJECT_NAME(fk.parent_object_id) + ']' 
-+		' ADD CONSTRAINT ' + '[' + OBJECT_NAME(object_id) + ']'
-+		' FOREIGN KEY(' +   [mrwolf].[fn_concat_column_names_fk](fk.object_id, fk.parent_object_id, 'C') + ')'
-+		' REFERENCES ' + '[' + OBJECT_SCHEMA_NAME(fk.referenced_object_id) + '].[' + OBJECT_NAME(fk.referenced_object_id) + ']' + ' (' + [mrwolf].[fn_concat_column_names_fk](fk.object_id, fk.referenced_object_id, 'P') + ')' 
-+		CASE WHEN fk.update_referential_action_desc != 'NO_ACTION' THEN ' ON UPDATE ' + REPLACE(fk.update_referential_action_desc, '_', ' ') ELSE '' END
-+		CASE WHEN fk.delete_referential_action_desc != 'NO_ACTION' THEN ' ON DELETE ' + REPLACE(fk.delete_referential_action_desc, '_', ' ') ELSE '' END as "sql_string"
-,		'ADD_FOREIGN_KEY_CONSTRAINT' as "sql_type"
-FROM sys.foreign_keys fk
-WHERE fk.referenced_object_id = OBJECT_ID(@TableToDrop) or fk.parent_object_id = OBJECT_ID(@TableToDrop)
 
-UNION ALL
-
--- query for drop foreign keys
-SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
-,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-,		OBJECT_NAME(OBJECT_ID(@TableToDrop)) as "sql_key"
-,		'ALTER TABLE ' + '[' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + ']' + '.[' + OBJECT_NAME(fk.parent_object_id) + '] DROP CONSTRAINT '+fk.name as "sql_string"
-,		'DROP_FOREIGN_KEY_CONSTRAINT' as sql_type 
-FROM sys.foreign_keys fk
-WHERE fk.referenced_object_id = OBJECT_ID(@TableToDrop) or fk.parent_object_id = OBJECT_ID(@TableToDrop)
--- < BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
-
-/*
-Following code will perform:
-1) DROP FOREIGN KEYS (connected to @TableToDrop)
-2) DROP TABLE (@TableToDrop)
-3) CREATE TABLE: <this part shoul be edited in order to apply desidered modification>
-4) RESTORE FOREIGN KEYS : If all gone well, all the fk will be restored by the script saved before, do you rememeber?
-*/
-
--- > DROP THE FOREIGN KEYS	*************************************************************************************************************************
--- (1)
-SET @sql = 'EXEC {schema}.{procedure} ''{table}'', ''DROP_FOREIGN_KEY_CONSTRAINT'''
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
-EXEC sp_sqlexec @sql
-
--- < DROP THE FOREIGN KEYS	*************************************************************************************************************************
-
--- > (2) DROP TABLE		*****************************************************************************************************************************
-DECLARE @comm_drop_table varchar(max) = 'DROP TABLE {table}'
-SET @sql = @comm_drop_table
-SET @sql = REPLACE(@sql, '{table}', @TableToDrop)
-IF OBJECT_ID(@TableToDrop) is not null
-	EXEC sp_sqlexec @sql
--- < (2) DROP TABLE		*****************************************************************************************************************************
-
--- > (3) CREATE TABLE	*****************************************************************************************************************************
-CREATE TABLE [store].[OrderDetails](
-	[Id] [int] IDENTITY(1,1) NOT NULL,
-	[LineItemTotal] [money]  NULL,
-	[OrderId] [int] NOT NULL,
-	[ProductId] [int] NOT NULL,
-	[Quantity] [int] NOT NULL,
-	[TimeStamp] [timestamp] NOT NULL,
-	[UnitCost] [money] NOT NULL,
- CONSTRAINT [PK_OrderDetails] PRIMARY KEY CLUSTERED 
-(
-	[Id] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-) ON [PRIMARY]
--- < (3) CREATE TABLE	*****************************************************************************************************************************
-
--- > (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
-SET @sql = 'EXEC {schema}.{procedure} ''{table}'', ''ADD_FOREIGN_KEY_CONSTRAINT'''
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
-EXEC sp_sqlexec @sql
--- < (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
--- > ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: FEATURE 01 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
