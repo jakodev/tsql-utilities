@@ -28,7 +28,7 @@ DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_key]'
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
 DECLARE	@TableToDrop varchar(384) = '[IntroToEF6].[store].[Products]'
-DECLARE @Debugmode bit = 'false'
+DECLARE @Debugmode bit = 'true'
 DECLARE @comm_create_table varchar(max) =
 '
 CREATE TABLE {table} (

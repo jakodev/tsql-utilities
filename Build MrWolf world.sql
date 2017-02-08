@@ -19,7 +19,7 @@ the table shuold be provided by YOU, this utility cannot read your mind ;)
 DECLARE @schema varchar(10) = '[mrwolf]'
 DECLARE @sql varchar(max)
 DECLARE @function varchar(128) = '[fn_concat_column_names_fk]'
-DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_key]'
+DECLARE @procedure varchar(128)
 DECLARE @tbl_scripts varchar(50) = '[tbl_scripts]'
 -- ##################################################################################################################################################
 
@@ -104,15 +104,28 @@ if OBJECT_ID(@schema +'.'+ @function) is null
 -- < [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
 
 -- > [sp_exec_scripts_by_key] PROCEDURE CREATION		*********************************************************************************************
+SET @procedure = '[sp_exec_scripts_by_keys]'
 SET @comm_create_function =
 'CREATE PROCEDURE {schema}.{procedure}
 (
+	@obj_schema varchar(128),
+	@obj_name varchar(128),
 	@sql_key varchar(128),
-	@sql_type varchar(50)	
+	@sql_type varchar(50),
+	@sql_hash varchar(100),
+	@sql_status int
 )
 AS
 
-DECLARE sql_script_cursor CURSOR FOR SELECT sql_string, sql_hash FROM [mrwolf].[tbl_scripts] WHERE sql_key = @sql_key and sql_type = @sql_type and sql_status = 0
+DECLARE sql_script_cursor CURSOR FOR	SELECT sql_string, sql_hash 
+										FROM [mrwolf].[tbl_scripts]
+										WHERE	(ISNULL(@obj_schema,''0''	)= ''0'' or (	obj_schema	= @obj_schema	))
+										  AND	(ISNULL(@obj_name,	''0''	)= ''0'' or (	obj_name	= @obj_name		))
+										  AND	(ISNULL(@sql_key,	''0''	)= ''0'' or (	sql_key		= @sql_key		))
+										  AND	(ISNULL(@sql_type,	''0''	)= ''0'' or (	sql_type	= @sql_type		))
+										  AND	(ISNULL(@sql_hash,	''0''	)= ''0'' or (	sql_hash	= @sql_hash		))
+										  AND	(ISNULL(@sql_status,''0''	)= ''0'' or (	sql_status	= @sql_status	))
+
 DECLARE @sql varchar(max)
 DECLARE @key varchar(50)
 
