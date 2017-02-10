@@ -28,7 +28,7 @@ DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_key]'
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
 DECLARE	@TableToDrop varchar(384) = '[IntroToEF6].[store].[Products]'
-DECLARE @Debugmode bit = 'true'
+DECLARE @Debugmode bit = 'false'
 DECLARE @comm_create_table varchar(max) =
 '
 CREATE TABLE {table} (
@@ -123,8 +123,12 @@ IF OBJECT_ID(@TableToDrop) is not null
 BEGIN
 	IF @Debugmode = 'false'
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT 'Table ' + @TableToDrop + ' has been dropped!'
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT 'Table ' + @TableToDrop + ' has been dropped!'
+		BEGIN CATCH
+			PRINT ERROR_NUMBER() + ' ' + ERROR_MESSAGE()
+		END CATCH
 	END	
 	ELSE
 	PRINT 'DROP TABLE (Debug mode enabled)'
