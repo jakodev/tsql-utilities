@@ -112,46 +112,63 @@ SET @comm_create_function =
 	@obj_name varchar(128),
 	@sql_key varchar(128),
 	@sql_type varchar(50),
-	@sql_hash varchar(100),
-	@sql_status int
+	@sql_hash varchar(100)
 )
 AS
 
-DECLARE sql_script_cursor CURSOR FOR	SELECT sql_string, sql_hash 
-										FROM [mrwolf].[tbl_scripts]
-										WHERE	(ISNULL(@obj_schema,''0''	)= ''0'' or (	obj_schema	= @obj_schema	))
-										  AND	(ISNULL(@obj_name,	''0''	)= ''0'' or (	obj_name	= @obj_name		))
-										  AND	(ISNULL(@sql_key,	''0''	)= ''0'' or (	sql_key		= @sql_key		))
-										  AND	(ISNULL(@sql_type,	''0''	)= ''0'' or (	sql_type	= @sql_type		))
-										  AND	(ISNULL(@sql_hash,	''0''	)= ''0'' or (	sql_hash	= @sql_hash		))
-										  AND	(ISNULL(@sql_status,''0''	)= ''0'' or (	sql_status	= @sql_status	))
+DECLARE sql_script_cursor CURSOR FOR	SELECT sql_string, sql_hash, sql_status
+										FROM {schema}.{table}
+										WHERE	(ISNULL(@obj_schema,''0''	) in (''0'','''') or (	obj_schema	= @obj_schema	))
+										AND		(ISNULL(@obj_name,	''0''	) in (''0'','''') or (	obj_name	= @obj_name		))
+										AND		(ISNULL(@sql_key,	''0''	) in (''0'','''') or (	sql_key		= @sql_key		))
+										AND		(ISNULL(@sql_type,	''0''	) in (''0'','''') or (	sql_type	= @sql_type		))
+										AND		(ISNULL(@sql_hash,	''0''	) in (''0'','''') or (	sql_hash	= @sql_hash		))
+										AND		(COALESCE(NULLIF(@obj_schema,	'''')
+														, NULLIF(@obj_name,		'''')
+														, NULLIF(@sql_key,		'''')
+														, NULLIF(@sql_type,		'''')
+														, NULLIF(@sql_hash,		'''')
+												) is not null)
 
 DECLARE @sql varchar(max)
-DECLARE @key varchar(50)
+DECLARE @hash varchar(50)
+DECLARE @status int
 
 BEGIN
 	
 	OPEN sql_script_cursor
-	FETCH NEXT FROM sql_script_cursor INTO @sql, @key
+	FETCH NEXT FROM sql_script_cursor INTO @sql, @hash, @status
 	WHILE (@@FETCH_STATUS = 0)
 	BEGIN
 		
 		BEGIN TRY
-			EXEC sp_sqlexec @sql
-			PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
-			UPDATE [mrwolf].[tbl_scripts] SET sql_status = 1, sql_status_message = ''Success'' WHERE sql_hash = @key
+			
+			IF @status = 1
+				BEGIN
+					PRINT ''WARNING: This script was skipped due to a previous execution: '' + ''"'' + @sql + ''"'' + '' ('' + @hash + '')''
+				END
+			ELSE
+				BEGIN
+					EXEC sp_sqlexec @sql
+					PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
+					UPDATE {schema}.{table} SET sql_status = 1, sql_status_message = ''Success'' WHERE sql_hash = @hash
+				END
+
 		END TRY
+
 		BEGIN CATCH
+		
 			DECLARE @ErrorMessage NVARCHAR(4000);
 			DECLARE @ErrorNumber INT;
 
 			SELECT	@ErrorMessage = ERROR_MESSAGE(),
 					@ErrorNumber = ERROR_NUMBER();
 			
-			UPDATE [mrwolf].[tbl_scripts] SET sql_status = -@ErrorNumber, sql_status_message = @ErrorMessage WHERE sql_hash = @key
+			UPDATE {schema}.{table} SET sql_status = -@ErrorNumber, sql_status_message = @ErrorMessage WHERE sql_hash = @hash
+		
 		END CATCH
 		
-		FETCH NEXT FROM sql_script_cursor INTO @sql, @key
+		FETCH NEXT FROM sql_script_cursor INTO @sql, @hash, @status
 	END
 	CLOSE sql_script_cursor
 	DEALLOCATE sql_script_cursor
@@ -161,6 +178,7 @@ END'
 SET @sql = @comm_create_function
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
+SET @sql = REPLACE(@sql, '{table}', @tbl_scripts)
 if OBJECT_ID(@schema +'.'+@procedure) is null
 	BEGIN
 		EXEC sp_sqlexec @sql
