@@ -1,10 +1,10 @@
 /*-- ================================================================================================================================================
 --	Name: MRWOLF-FEATURE-1
---	MRWOLF-UTILITIES Compatibility: 2.01.00
+--	MRWOLF-UTILITIES Compatibility: 2.02.00
 --	Author:			Jakodev
 --	Create date:	JAN-2017
 --	Last Update:	JAN-2017
---	Version:		1.01.00
+--	Version:		1.03.00
 
 [+]	Description:	-----------------------------------------------------------------
 	Performs TABLE DROP/CREATE taking care of their foreign key dependencies
@@ -23,7 +23,7 @@
 /* DON'T TOUCH THESE VARIABLES */											
 DECLARE @sql varchar(max)
 DECLARE @schema varchar(10) = '[mrwolf]'
-DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_key]' 
+DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_keys]' 
 -- ##################################################################################################################################################
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
@@ -102,12 +102,13 @@ Following code will perform:
 */
 
 -- > (1) DROP THE FOREIGN KEYS	*********************************************************************************************************************
-SET @sql = 'EXEC {schema}.{procedure} ''{table}'', ''DROP_FOREIGN_KEY_CONSTRAINT'''
+SET @sql = 'EXEC {schema}.{procedure} @sql_key=''{table}'', @sql_type=''DROP_FOREIGN_KEY_CONSTRAINT'''
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
 SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
 IF @Debugmode = 'false'
 BEGIN
+	-- try/catch handled by called procedure
 	EXEC sp_sqlexec @sql
 END
 ELSE
@@ -125,9 +126,10 @@ BEGIN
 	BEGIN
 		BEGIN TRY
 			EXEC sp_sqlexec @sql
-			PRINT 'Table ' + @TableToDrop + ' has been dropped!'
+			PRINT 'Table ' + @TableToDrop + ' has been dropped successful!'
+		END TRY
 		BEGIN CATCH
-			PRINT ERROR_NUMBER() + ' ' + ERROR_MESSAGE()
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
 		END CATCH
 	END	
 	ELSE
@@ -142,8 +144,13 @@ IF OBJECT_ID(@TableToDrop) is null
 BEGIN
 	IF @Debugmode = 'false'
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT 'Table ' + @TableToDrop + ' has been created successful!'
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT 'Table ' + @TableToDrop + ' has been created successful!'
+		END TRY
+		BEGIN CATCH
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		END CATCH
 	END
 	ELSE
 	PRINT 'CREATE TABLE (Debug mode enabled)'
@@ -151,14 +158,28 @@ END
 -- < (3) CREATE TABLE	*****************************************************************************************************************************
 
 -- > (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
-SET @sql = 'EXEC {schema}.{procedure} ''{table}'', ''ADD_FOREIGN_KEY_CONSTRAINT'''
+SET @sql = 'EXEC {schema}.{procedure} @sql_key=''{table}'', @sql_type=''ADD_FOREIGN_KEY_CONSTRAINT'''
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
 SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
 IF @Debugmode = 'false'
 BEGIN
+	-- try/catch handled by called procedure
 	EXEC sp_sqlexec @sql
 END
 ELSE
 	PRINT 'RESTORE FOREIGN KEYS (Debug mode enabled)'
 -- < (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
+
+SET @sql = 'SELECT * FROM [mrwolf].[tbl_scripts] WHERE sql_status < 0'
+EXEC sp_sqlexec @sql
+
+DECLARE @errors int
+SELECT @errors = COUNT(*)
+FROM [mrwolf].[tbl_scripts] 
+WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@TableToDrop)) AND sql_type IN ('ADD_FOREIGN_KEY_CONSTRAINT','DROP_FOREIGN_KEY_CONSTRAINT')
+
+IF @errors > 0
+	PRINT 'ATTENTION: check for the tbl_scripts (or the ''Results'' panel), some errors was raised!'
+
+

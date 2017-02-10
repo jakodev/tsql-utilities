@@ -30,8 +30,13 @@ SET @sql = @comm_create_schema
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 if SCHEMA_ID(REPLACE(REPLACE(@schema, '[', ''), ']', '')) is null
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT 'SCHEMA ' + @schema + ' Has been created!'
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT 'SCHEMA ' + @schema + ' Has been created!'
+		END TRY
+		BEGIN CATCH
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		END CATCH
 	END
 -- < [MRWOLF] SCHEMA CREATION		*****************************************************************************************************************
 
@@ -98,8 +103,13 @@ SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{function}', @function)
 if OBJECT_ID(@schema +'.'+ @function) is null
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT 'FUNCTION ' + @schema + '.' + @function + ' Has been created!'
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT 'FUNCTION ' + @schema + '.' + @function + ' Has been created!'
+		END TRY
+		BEGIN CATCH
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		END CATCH
 	END
 -- < [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
 
@@ -108,11 +118,11 @@ SET @procedure = '[sp_exec_scripts_by_keys]'
 SET @comm_create_function =
 'CREATE PROCEDURE {schema}.{procedure}
 (
-	@obj_schema varchar(128),
-	@obj_name varchar(128),
-	@sql_key varchar(128),
-	@sql_type varchar(50),
-	@sql_hash varchar(100)
+	@obj_schema varchar(128) = null,
+	@obj_name varchar(128) = null,
+	@sql_key varchar(128) = null,
+	@sql_type varchar(50) = null,
+	@sql_hash varchar(100) = null
 )
 AS
 
@@ -181,8 +191,13 @@ SET @sql = REPLACE(@sql, '{procedure}', @procedure)
 SET @sql = REPLACE(@sql, '{table}', @tbl_scripts)
 if OBJECT_ID(@schema +'.'+@procedure) is null
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT 'STORED PROCEDURE ' + @schema + '.' + @procedure + ' Has been created!'
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT 'STORED PROCEDURE ' + @schema + '.' + @procedure + ' Has been created!'
+		END TRY
+		BEGIN CATCH
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		END CATCH
 	END
 -- < [sp_exec_scripts_by_key] PROCEDURE CREATION		*********************************************************************************************
 
@@ -211,8 +226,13 @@ SET @sql = REPLACE(@sql, '<schema>', REPLACE(REPLACE(@schema, '[',''), ']',''))
 SET @sql = REPLACE(@sql, '<table>', REPLACE(REPLACE(@tbl_scripts, '[',''), ']',''))
 if OBJECT_ID(@schema +'.'+@tbl_scripts) is null
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT 'TABLE ' + @schema + '.' + @tbl_scripts + ' Has been created!'
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT 'TABLE ' + @schema + '.' + @tbl_scripts + ' Has been created!'
+		END TRY
+		BEGIN CATCH
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		END CATCH
 	END
 -- < [tbl_scripts] TABLE CREATION		*************************************************************************************************************
 
