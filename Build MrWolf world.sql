@@ -3,7 +3,7 @@
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last Update: JAN-2017
--- Version:		2.01.00
+-- Version:		2.02.00
 -- Description:	
 Stash in ad hoc new schema called [mrwolf] some, hopefully useful, features to stop arguing with sql server. 
 It comes with extra features appended
@@ -19,7 +19,7 @@ the table shuold be provided by YOU, this utility cannot read your mind ;)
 DECLARE @schema varchar(10) = '[mrwolf]'
 DECLARE @sql varchar(max)
 DECLARE @function varchar(128) = '[fn_concat_column_names_fk]'
-DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_key]'
+DECLARE @procedure varchar(128)
 DECLARE @tbl_scripts varchar(50) = '[tbl_scripts]'
 -- ##################################################################################################################################################
 
@@ -104,26 +104,71 @@ if OBJECT_ID(@schema +'.'+ @function) is null
 -- < [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
 
 -- > [sp_exec_scripts_by_key] PROCEDURE CREATION		*********************************************************************************************
+SET @procedure = '[sp_exec_scripts_by_keys]'
 SET @comm_create_function =
 'CREATE PROCEDURE {schema}.{procedure}
 (
+	@obj_schema varchar(128),
+	@obj_name varchar(128),
 	@sql_key varchar(128),
-	@sql_type varchar(50)	
+	@sql_type varchar(50),
+	@sql_hash varchar(100)
 )
 AS
 
-DECLARE sql_script_cursor CURSOR FOR SELECT sql_string FROM [mrwolf].[tbl_scripts] WHERE sql_key = @sql_key and sql_type = @sql_type
+DECLARE sql_script_cursor CURSOR FOR	SELECT sql_string, sql_hash, sql_status
+										FROM {schema}.{table}
+										WHERE	(ISNULL(@obj_schema,''0''	) in (''0'','''') or (	obj_schema	= @obj_schema	))
+										AND		(ISNULL(@obj_name,	''0''	) in (''0'','''') or (	obj_name	= @obj_name		))
+										AND		(ISNULL(@sql_key,	''0''	) in (''0'','''') or (	sql_key		= @sql_key		))
+										AND		(ISNULL(@sql_type,	''0''	) in (''0'','''') or (	sql_type	= @sql_type		))
+										AND		(ISNULL(@sql_hash,	''0''	) in (''0'','''') or (	sql_hash	= @sql_hash		))
+										AND		(COALESCE(NULLIF(@obj_schema,	'''')
+														, NULLIF(@obj_name,		'''')
+														, NULLIF(@sql_key,		'''')
+														, NULLIF(@sql_type,		'''')
+														, NULLIF(@sql_hash,		'''')
+												) is not null)
+
 DECLARE @sql varchar(max)
+DECLARE @hash varchar(50)
+DECLARE @status int
 
 BEGIN
-
+	
 	OPEN sql_script_cursor
-	FETCH NEXT FROM sql_script_cursor INTO @sql
+	FETCH NEXT FROM sql_script_cursor INTO @sql, @hash, @status
 	WHILE (@@FETCH_STATUS = 0)
 	BEGIN
-		EXEC sp_sqlexec @sql
-		PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
-		FETCH NEXT FROM sql_script_cursor INTO @sql
+		
+		BEGIN TRY
+			
+			IF @status = 1
+				BEGIN
+					PRINT ''WARNING: This script was skipped due to a previous execution: '' + ''"'' + @sql + ''"'' + '' ('' + @hash + '')''
+				END
+			ELSE
+				BEGIN
+					EXEC sp_sqlexec @sql
+					PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
+					UPDATE {schema}.{table} SET sql_status = 1, sql_status_message = ''Success'' WHERE sql_hash = @hash
+				END
+
+		END TRY
+
+		BEGIN CATCH
+		
+			DECLARE @ErrorMessage NVARCHAR(4000);
+			DECLARE @ErrorNumber INT;
+
+			SELECT	@ErrorMessage = ERROR_MESSAGE(),
+					@ErrorNumber = ERROR_NUMBER();
+			
+			UPDATE {schema}.{table} SET sql_status = -@ErrorNumber, sql_status_message = @ErrorMessage WHERE sql_hash = @hash
+		
+		END CATCH
+		
+		FETCH NEXT FROM sql_script_cursor INTO @sql, @hash, @status
 	END
 	CLOSE sql_script_cursor
 	DEALLOCATE sql_script_cursor
@@ -133,6 +178,7 @@ END'
 SET @sql = @comm_create_function
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
+SET @sql = REPLACE(@sql, '{table}', @tbl_scripts)
 if OBJECT_ID(@schema +'.'+@procedure) is null
 	BEGIN
 		EXEC sp_sqlexec @sql
@@ -144,8 +190,19 @@ if OBJECT_ID(@schema +'.'+@procedure) is null
 DECLARE @comm_create_table_scripts varchar(max)
 
 SET @comm_create_table_scripts = 
-'CREATE TABLE {schema}.{table} (obj_schema varchar(128) not null, obj_name varchar(128) not null, sql_key varchar(128) not null, sql_string varchar(1000) not null, sql_type varchar(50) not null, sql_hash varchar(100) not null)
-ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (sql_hash)'
+'CREATE TABLE {schema}.{table} 
+	(	obj_schema varchar(128) not null
+	,	obj_name varchar(128) not null
+	,	sql_key varchar(128) not null
+	,	sql_string varchar(1000) not null
+	,	sql_type varchar(50) not null
+	,	sql_hash varchar(100) not null
+	,	sql_status int DEFAULT 0
+	,	sql_status_message varchar(500) DEFAULT ''Not executed yet'')
+ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (sql_hash)
+-- add description about column sql_status
+EXEC sys.sp_addextendedproperty @name=N''MS_Description'', @value=N''0=Never Run; 1=Run Successful; -x=Error code'' , @level0type=N''SCHEMA'',@level0name=N''<schema>'', @level1type=N''TABLE'',@level1name=N''<table>'', @level2type=N''COLUMN'',@level2name=N''sql_status''
+'
 
 SET @sql = @comm_create_table_scripts
 SET @sql = REPLACE(@sql, '{schema}', @schema)
