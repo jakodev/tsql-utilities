@@ -50,9 +50,11 @@ SET @comm_create_function =
 	Speaking of foreign keys this function returns a concatenated list of column names
 	in one case the list of constraint columns, in another the list of referenced columns
 	*/
-	@fk_parent_tableid int,	-- table referenced by the foreign key
-	@tableid int,			-- could be the parent table or child table. (beware: the child table, from the point of view of FK, is called parent_object_id)
-	@type nvarchar(1)		-- could assume two only value ''P'' = parent table; ''C'' = child table (parent_object_id for FK)
+	@tableid_referenced int,	-- table referenced by the foreign key
+	@tableid int,				-- could be the parent table or the child table. (beware: the child table, from the point of view of the FK in SQLSERVER, is called parent_object_id)
+	@type char(1)				-- could assume two only value	''P'' = parent table (referenced_object_id in SQLSERVER)
+								--								''C'' = child table (parent_object_id in SQLSERVER)
+
 )
 RETURNS nvarchar(150)
 
@@ -66,7 +68,7 @@ BEGIN
 	DECLARE @parent_col int		-- the constrained column (child table)
 	DECLARE @referenced_col int	-- the referenced column (parent table)
 
-	DECLARE c_cols CURSOR FOR SELECT parent_column_id, referenced_column_id FROM sys.foreign_key_columns WHERE constraint_object_id = @fk_parent_tableid
+	DECLARE c_cols CURSOR FOR SELECT parent_column_id, referenced_column_id FROM sys.foreign_key_columns WHERE constraint_object_id = @tableid_referenced
 	
 	OPEN c_cols
 	FETCH NEXT FROM c_cols INTO @parent_col, @referenced_col

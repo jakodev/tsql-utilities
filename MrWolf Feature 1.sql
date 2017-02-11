@@ -4,7 +4,7 @@
 --	Author:			Jakodev
 --	Create date:	JAN-2017
 --	Last Update:	JAN-2017
---	Version:		1.03.00
+--	Version:		1.04.00
 
 [+]	Description:	-----------------------------------------------------------------
 	Performs TABLE DROP/CREATE taking care of their foreign key dependencies
@@ -14,7 +14,7 @@
 	into the right database (where the drop/create should be perfomed).
 	---------------------------------------------------------------------------------
 [+]	Customizing:
-	@TableToDrop		> insert the name of the table you want to drop/create safely
+	@TableToRebuild		> insert the name of the table you want to drop/create safely
 	@Debugmode			> execute the code without performs any FK/TABLE drop/create
 	@comm_create_table	> You can specify here the columns and constraint for the table to rebuild. Write your code <BETWEEN_THIS_TAG>
 -- ================================================================================================================================================*/
@@ -27,7 +27,7 @@ DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_keys]'
 -- ##################################################################################################################################################
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
-DECLARE	@TableToDrop varchar(384) = '[IntroToEF6].[store].[Products]'
+DECLARE	@TableToRebuild varchar(384) = '[IntroToEF6].[store].[ShoppingCartRecords]'
 DECLARE @Debugmode bit = 'false'
 DECLARE @comm_create_table varchar(max) =
 '
@@ -35,19 +35,12 @@ CREATE TABLE {table} (
 	/*<BETWEEN_THIS_TAG>*/
 
 	[Id] [int] IDENTITY(1,1) NOT NULL,
-	[CategoryId] [int] NULL,
-	[CurrentPrice] [money] NOT NULL,
-	[Description] [nvarchar](3800) NOT NULL,
-	[IsFeatured] [bit] NOT NULL,
-	[ModelName] [nvarchar](50) NOT NULL,
-	[ModelNumber] [nvarchar](50) NOT NULL,
-	[ProductImage] [nvarchar](150) NOT NULL,
-	[ProductImageThumb] [nvarchar](150) NOT NULL,
+	[CustomerId] [int] NOT NULL,
+	[DateCreated] [datetime] NULL,
+	[ProductId] [int] NOT NULL,
+	[Quantity] [int] NOT NULL,
 	[TimeStamp] [timestamp] NOT NULL,
-	[UnitCost] [money] NOT NULL,
-	[UnitsInStock] [int] NOT NULL,
-	[CategoryExtras] [int] NOT NULL,
- CONSTRAINT [PK_Products] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_ShoppingCartRecords] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
@@ -69,7 +62,7 @@ from (
 	-- query for create foreign keys
 	SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
 	,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-	,		OBJECT_NAME(OBJECT_ID(@TableToDrop)) as "sql_key"
+	,		OBJECT_NAME(OBJECT_ID(@TableToRebuild)) as "sql_key"
 	,		'ALTER TABLE ' + '['+OBJECT_SCHEMA_NAME(fk.object_id)+'].['+ OBJECT_NAME(fk.parent_object_id) + ']' 
 	+		' ADD CONSTRAINT ' + '[' + OBJECT_NAME(object_id) + ']'
 	+		' FOREIGN KEY(' +   [mrwolf].[fn_concat_column_names_fk](fk.object_id, fk.parent_object_id, 'C') + ')'
@@ -78,25 +71,25 @@ from (
 	+		CASE WHEN fk.delete_referential_action_desc != 'NO_ACTION' THEN ' ON DELETE ' + REPLACE(fk.delete_referential_action_desc, '_', ' ') ELSE '' END COLLATE database_default as "sql_string"
 	,		'ADD_FOREIGN_KEY_CONSTRAINT' as "sql_type"
 	FROM sys.foreign_keys fk
-	WHERE fk.referenced_object_id = OBJECT_ID(@TableToDrop) or fk.parent_object_id = OBJECT_ID(@TableToDrop)
+	WHERE fk.referenced_object_id = OBJECT_ID(@TableToRebuild) or fk.parent_object_id = OBJECT_ID(@TableToRebuild)
 
 	UNION ALL
 
 	-- query for drop foreign keys
 	SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
 	,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-	,		OBJECT_NAME(OBJECT_ID(@TableToDrop)) as "sql_key"
+	,		OBJECT_NAME(OBJECT_ID(@TableToRebuild)) as "sql_key"
 	,		'ALTER TABLE ' + '[' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + ']' + '.[' + OBJECT_NAME(fk.parent_object_id) + '] DROP CONSTRAINT '+fk.name COLLATE database_default as "sql_string"
 	,		'DROP_FOREIGN_KEY_CONSTRAINT' as sql_type 
 	FROM sys.foreign_keys fk
-	WHERE fk.referenced_object_id = OBJECT_ID(@TableToDrop) or fk.parent_object_id = OBJECT_ID(@TableToDrop)
+	WHERE fk.referenced_object_id = OBJECT_ID(@TableToRebuild) or fk.parent_object_id = OBJECT_ID(@TableToRebuild)
 ) mainquery
 -- < BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
 
 /*
 Following code will perform:
-1) DROP FOREIGN KEYS (connected to @TableToDrop)
-2) DROP TABLE (@TableToDrop)
+1) DROP FOREIGN KEYS (connected to @TableToRebuild)
+2) DROP TABLE (@TableToRebuild)
 3) CREATE TABLE: <this part shoul be edited in order to apply desidered modification>
 4) RESTORE FOREIGN KEYS : If all gone well, all the fk will be restored by the script saved before, do you rememeber?
 */
@@ -105,7 +98,7 @@ Following code will perform:
 SET @sql = 'EXEC {schema}.{procedure} @sql_key=''{table}'', @sql_type=''DROP_FOREIGN_KEY_CONSTRAINT'''
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
+SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToRebuild)))
 IF @Debugmode = 'false'
 BEGIN
 	-- try/catch handled by called procedure
@@ -119,14 +112,14 @@ ELSE
 -- > (2) DROP TABLE		*****************************************************************************************************************************
 DECLARE @comm_drop_table varchar(max) = 'DROP TABLE {table}'
 SET @sql = @comm_drop_table
-SET @sql = REPLACE(@sql, '{table}', @TableToDrop)
-IF OBJECT_ID(@TableToDrop) is not null
+SET @sql = REPLACE(@sql, '{table}', @TableToRebuild)
+IF OBJECT_ID(@TableToRebuild) is not null
 BEGIN
 	IF @Debugmode = 'false'
 	BEGIN
 		BEGIN TRY
 			EXEC sp_sqlexec @sql
-			PRINT 'Table ' + @TableToDrop + ' has been dropped successful!'
+			PRINT 'Table ' + @TableToRebuild + ' has been dropped successful!'
 		END TRY
 		BEGIN CATCH
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
@@ -139,14 +132,14 @@ END
 
 -- > (3) CREATE TABLE	*****************************************************************************************************************************
 SET @sql = @comm_create_table
-SET @sql = REPLACE(@sql, '{table}', @TableToDrop)
-IF OBJECT_ID(@TableToDrop) is null
+SET @sql = REPLACE(@sql, '{table}', @TableToRebuild)
+IF OBJECT_ID(@TableToRebuild) is null
 BEGIN
 	IF @Debugmode = 'false'
 	BEGIN
 		BEGIN TRY
 			EXEC sp_sqlexec @sql
-			PRINT 'Table ' + @TableToDrop + ' has been created successful!'
+			PRINT 'Table ' + @TableToRebuild + ' has been created successful!'
 		END TRY
 		BEGIN CATCH
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
@@ -161,7 +154,7 @@ END
 SET @sql = 'EXEC {schema}.{procedure} @sql_key=''{table}'', @sql_type=''ADD_FOREIGN_KEY_CONSTRAINT'''
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToDrop)))
+SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToRebuild)))
 IF @Debugmode = 'false'
 BEGIN
 	-- try/catch handled by called procedure
@@ -171,15 +164,18 @@ ELSE
 	PRINT 'RESTORE FOREIGN KEYS (Debug mode enabled)'
 -- < (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
 
-SET @sql = 'SELECT * FROM [mrwolf].[tbl_scripts] WHERE sql_status < 0'
-EXEC sp_sqlexec @sql
 
 DECLARE @errors int
 SELECT @errors = COUNT(*)
 FROM [mrwolf].[tbl_scripts] 
-WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@TableToDrop)) AND sql_type IN ('ADD_FOREIGN_KEY_CONSTRAINT','DROP_FOREIGN_KEY_CONSTRAINT')
+WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@TableToRebuild)) AND sql_type IN ('ADD_FOREIGN_KEY_CONSTRAINT','DROP_FOREIGN_KEY_CONSTRAINT')
 
 IF @errors > 0
-	PRINT 'ATTENTION: check for the tbl_scripts (or the ''Results'' panel), some errors was raised!'
+	BEGIN
+		PRINT 'ATTENTION: check for the tbl_scripts (or the ''Results'' panel), some errors was raised!'
+		SET @sql = 'SELECT * FROM [mrwolf].[tbl_scripts] WHERE sql_status < 0'
+		EXEC sp_sqlexec @sql
+	END
+	
 
 
