@@ -27,7 +27,7 @@ DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_keys]'
 -- ##################################################################################################################################################
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
-DECLARE	@TableToRebuild varchar(384) = '[IntroToEF6].[store].[ShoppingCartRecords]'
+DECLARE	@TableToRebuild varchar(384) = '[IntroToEF6].[store].[Customers]'
 DECLARE @Debugmode bit = 'false'
 DECLARE @comm_create_table varchar(max) =
 '
@@ -35,16 +35,16 @@ CREATE TABLE {table} (
 	/*<BETWEEN_THIS_TAG>*/
 
 	[Id] [int] IDENTITY(1,1) NOT NULL,
-	[CustomerId] [int] NOT NULL,
-	[DateCreated] [datetime] NULL,
-	[ProductId] [int] NOT NULL,
-	[Quantity] [int] NOT NULL,
+	[EmailAddress] [nvarchar](50) NOT NULL,
+	[FullName] [nvarchar](50) NOT NULL,
+	[Password] [nvarchar](50) NOT NULL,
 	[TimeStamp] [timestamp] NOT NULL,
- CONSTRAINT [PK_ShoppingCartRecords] PRIMARY KEY CLUSTERED 
+ CONSTRAINT [PK_Customers] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
+
 
 	/*<BETWEEN_THIS_TAG>*/
 '
@@ -161,7 +161,11 @@ BEGIN
 	EXEC sp_sqlexec @sql
 END
 ELSE
-	PRINT 'RESTORE FOREIGN KEYS (Debug mode enabled)'
+	BEGIN
+		PRINT 'RESTORE FOREIGN KEYS (Debug mode enabled)'
+		SET @sql = 'SELECT * FROM [mrwolf].[tbl_scripts]'
+		EXEC sp_sqlexec @sql
+	END
 -- < (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
 
 
