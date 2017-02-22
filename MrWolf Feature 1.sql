@@ -27,19 +27,26 @@ DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_keys]'
 -- ##################################################################################################################################################
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
-DECLARE	@TableToRebuild varchar(384) = '[IntroToEF6].[store].[Customers]'
-DECLARE @Debugmode bit = 'false'
+DECLARE	@TableToRebuild varchar(384) = '[IntroToEF6].[store].[Products]'
+DECLARE @Debugmode bit = 'true'
 DECLARE @comm_create_table varchar(max) =
 '
 CREATE TABLE {table} (
 	/*<BETWEEN_THIS_TAG>*/
 
 	[Id] [int] IDENTITY(1,1) NOT NULL,
-	[EmailAddress] [nvarchar](50) NOT NULL,
-	[FullName] [nvarchar](50) NOT NULL,
-	[Password] [nvarchar](50) NOT NULL,
+	[CategoryId] [int] NOT NULL,
+	[CurrentPrice] [money] NOT NULL,
+	[Description] [nvarchar](3800) NOT NULL,
+	[IsFeatured] [bit] NOT NULL,
+	[ModelName] [nvarchar](50) NOT NULL,
+	[ModelNumber] [nvarchar](50) NOT NULL,
+	[ProductImage] [nvarchar](150) NULL,
+	[ProductImageThumb] [nvarchar](150) NULL,
 	[TimeStamp] [timestamp] NOT NULL,
- CONSTRAINT [PK_Customers] PRIMARY KEY CLUSTERED 
+	[UnitCost] [money] NOT NULL,
+	[UnitsInStock] [int] NOT NULL,
+ CONSTRAINT [PK_Products] PRIMARY KEY CLUSTERED 
 (
 	[Id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
@@ -51,6 +58,7 @@ CREATE TABLE {table} (
 -- **************************************************************************************************************************************************
 
 -- > BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
+BEGIN TRY
 INSERT INTO [mrwolf].[tbl_scripts] (obj_schema, obj_name, sql_key, sql_string, sql_type, sql_hash)
 select	mainquery.obj_schema
 ,		mainquery.obj_name
@@ -84,6 +92,16 @@ from (
 	FROM sys.foreign_keys fk
 	WHERE fk.referenced_object_id = OBJECT_ID(@TableToRebuild) or fk.parent_object_id = OBJECT_ID(@TableToRebuild)
 ) mainquery
+END TRY
+BEGIN CATCH
+	DECLARE @err_num INT = ERROR_NUMBER()
+	DECLARE @err_msg NVARCHAR(4000) = ERROR_MESSAGE()
+	PRINT 'Something gone wrong! the insert statement raised the following error:'
+	PRINT 'Error Number:' + CONVERT( varchar(10), @err_num) + ' - '+ @err_msg 
+	IF @err_num = 2627
+		PRINT 'Maybe you''ve run this procedure in debug mode more than once without reset the environment between the first and the last execution'
+		PRINT ''
+END CATCH
 -- < BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
 
 /*
@@ -146,8 +164,10 @@ BEGIN
 		END CATCH
 	END
 	ELSE
-	PRINT 'CREATE TABLE (Debug mode enabled)'
+		PRINT 'CREATE TABLE (Debug mode enabled)'
 END
+ELSE
+	PRINT 'CREATE TABLE ignored, table already exists!'
 -- < (3) CREATE TABLE	*****************************************************************************************************************************
 
 -- > (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
