@@ -28,14 +28,14 @@ DECLARE @procedure varchar(128) = '[sp_exec_scripts_by_keys]'
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
 DECLARE	@TableToRebuild varchar(384) = '[IntroToEF6].[store].[Products]'
-DECLARE @Debugmode bit = 'true'
+DECLARE @Debugmode bit = 'false'
 DECLARE @comm_create_table varchar(max) =
 '
 CREATE TABLE {table} (
 	/*<BETWEEN_THIS_TAG>*/
 
 	[Id] [int] IDENTITY(1,1) NOT NULL,
-	[CategoryId] [int] NOT NULL,
+	[CategoryId] [int] NULL,
 	[CurrentPrice] [money] NOT NULL,
 	[Description] [nvarchar](3800) NOT NULL,
 	[IsFeatured] [bit] NOT NULL,

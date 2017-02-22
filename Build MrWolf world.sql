@@ -18,8 +18,9 @@ the table shuold be provided by YOU, this utility cannot read your mind ;)
 /* DON'T TOUCH THESE VARIABLES */											
 DECLARE @schema varchar(10) = '[mrwolf]'
 DECLARE @sql varchar(max)
-DECLARE @function varchar(128) = '[fn_concat_column_names_fk]'
+DECLARE @function varchar(128)
 DECLARE @procedure varchar(128)
+DECLARE @view varchar(128)
 DECLARE @tbl_scripts varchar(50) = '[tbl_scripts]'
 -- ##################################################################################################################################################
 
@@ -42,6 +43,7 @@ if SCHEMA_ID(REPLACE(REPLACE(@schema, '[', ''), ']', '')) is null
 
 -- > [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
 DECLARE @comm_create_function varchar(max)
+SET @function = '[fn_concat_column_names_fk]'
 
 SET @comm_create_function =
 'CREATE FUNCTION {schema}.{function}
@@ -237,6 +239,43 @@ if OBJECT_ID(@schema +'.'+@tbl_scripts) is null
 		END CATCH
 	END
 -- < [tbl_scripts] TABLE CREATION		*************************************************************************************************************
+
+-- > [v_foreign_key_cols] VIEW CREATION		*************************************************************************************************************
+DECLARE @comm_create_view_scripts varchar(max)
+SET @view = '[v_foreign_key_cols]'
+
+SET @comm_create_view_scripts = 
+'create view {schema}.{view} as
+select SCHEMA_NAME(obj.schema_id) as "Schema"
+,	fkcol.constraint_object_id as "Foreign Key Id", OBJECT_NAME(fkcol.constraint_object_id) as "Foreign Key Name"
+,	fkcol.parent_object_id as "Child Table Id", ''[''+SCHEMA_NAME(tbl_child.schema_id)+'']''+''.''+''[''+OBJECT_NAME(fkcol.parent_object_id)+'']'' as "Child Table Name"
+,	fkcol.parent_column_id as "Child Column Id", parent_cols.name as "Child Column Name"
+,	fkcol.referenced_object_id as "Parent Table Id", ''[''+SCHEMA_NAME(tbl_parent.schema_id)+'']''+''.''+''[''+OBJECT_NAME(fkcol.referenced_object_id)+'']'' as "Parent Table Name"
+,	fkcol.referenced_column_id as "Parent Column Id", referred_cols.name as "Parent Column Name"
+from sys.foreign_key_columns fkcol
+left join sys.all_columns parent_cols on (fkcol.parent_object_id = parent_cols.object_id and fkcol.parent_column_id = parent_cols.column_id)
+left join sys.all_columns referred_cols on (fkcol.referenced_object_id = referred_cols.object_id and fkcol.referenced_column_id = referred_cols.column_id)
+left join sys.all_columns constraint_cols on (fkcol.referenced_object_id = constraint_cols.object_id and fkcol.constraint_column_id = constraint_cols.column_id)
+left join sys.all_objects obj on (fkcol.constraint_object_id = obj.object_id)
+left join sys.tables tbl_child on (tbl_child.object_id = fkcol.parent_object_id)
+left join sys.tables tbl_parent on (tbl_parent.object_id = fkcol.referenced_object_id)
+'
+
+SET @sql = @comm_create_view_scripts
+SET @sql = REPLACE(@sql, '{schema}', @schema)
+SET @sql = REPLACE(@sql, '{view}', @view)
+if OBJECT_ID(@schema +'.'+@view) is null
+	BEGIN
+		BEGIN TRY
+			EXEC sp_sqlexec @sql
+			PRINT 'VIEW ' + @schema + '.' + @view + ' Has been created!'
+		END TRY
+		BEGIN CATCH
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		END CATCH
+	END
+-- < [v_foreign_key_cols] VIEW CREATION		*************************************************************************************************************
+
 
 -- ##################################################################################################################################################
 

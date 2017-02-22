@@ -3,9 +3,9 @@
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last Update: JAN-2017
--- Version:		2.01.00
+-- Version:		2.02.00
 -- Description:	
-Drop all the stored procedure, functions and table belonging to MRWOLF schema, and the schema itself.
+Drop all the stored-procedures, functions, tables and views belonging to MRWOLF schema, and the schema itself.
 -- ================================================================================================================================================*/
 BEGIN
 
@@ -14,7 +14,7 @@ BEGIN
 	DECLARE @object_type varchar(2)
 	DECLARE @sql varchar(max)
 
-	DECLARE drop_cursor CURSOR FOR select name, type from sys.objects where SCHEMA_NAME(schema_id) = @schema and type in ('FN', 'P', 'U')
+	DECLARE drop_cursor CURSOR FOR select name, type from sys.objects where SCHEMA_NAME(schema_id) = @schema and type in ('FN', 'P', 'U', 'V')
 
 	OPEN drop_cursor
 	FETCH NEXT FROM drop_cursor INTO @object_name, @object_type
@@ -26,6 +26,7 @@ BEGIN
 				WHEN 'FN' THEN 'DROP FUNCTION {schema}.{object}'
 				WHEN 'P' THEN 'DROP PROCEDURE {schema}.{object}'
 				WHEN 'U' THEN 'DROP TABLE {schema}.{object}'
+				WHEN 'V' THEN 'DROP VIEW {schema}.{object}'
 				ELSE null
 			END
 
