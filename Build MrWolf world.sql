@@ -16,34 +16,80 @@ the table shuold be provided by YOU, this utility cannot read your mind ;)
 -- ##################################################################################################################################################
 --						GLOBAL VARIABLES						
 /* DON'T TOUCH THESE VARIABLES */											
-DECLARE @schema varchar(10) = '[mrwolf]'
+
+
+--DECLARE @schema varchar(128) = 'Jakodev'
+--DECLARE @sql varchar(max)
+--DECLARE @function varchar(128)
+--DECLARE @procedure varchar(128)
+--DECLARE @view varchar(128)
+--DECLARE @tbl_scripts varchar(50) = 'tScripts'
+-- ##################################################################################################################################################
+
+-- > CREATE DATABASE	*****************************************************************************************************************************
+DECLARE @dbname varchar(128) = 'JakodevUtilities'
+DECLARE @schema varchar(128) = 'Jakodev'
 DECLARE @sql varchar(max)
 DECLARE @function varchar(128)
 DECLARE @procedure varchar(128)
 DECLARE @view varchar(128)
-DECLARE @tbl_scripts varchar(50) = '[tbl_scripts]'
--- ##################################################################################################################################################
+DECLARE @tbl_scripts varchar(50) = 'tScripts'
+DECLARE @comm_create_database varchar(200) = 'CREATE DATABASE {db}'
 
--- > [MRWOLF] SCHEMA CREATION		*****************************************************************************************************************
-DECLARE @comm_create_schema varchar(50) = 'CREATE SCHEMA {schema}'
+DECLARE @sqlCheck nvarchar(500)
+DECLARE @params nvarchar(500) = N'@returnFromExec int output'
+DECLARE @objExists int
 
-SET @sql = @comm_create_schema
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-if SCHEMA_ID(REPLACE(REPLACE(@schema, '[', ''), ']', '')) is null
+
+SET	@sql = @comm_create_database
+SET @sql = REPLACE(@sql, '{db}', @dbname)
+if DB_ID(@dbname) is null
 	BEGIN
 		BEGIN TRY
 			EXEC sp_sqlexec @sql
+			PRINT 'DATABASE ' + @dbname + ' Has been created"'
+		END TRY
+		BEGIN CATCH
+			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		END CATCH
+	END
+-- < CREATE DATABASE	*****************************************************************************************************************************
+
+DECLARE @BigSQL varchar(max)
+
+
+-- > SCHEMA CREATION		*************************************************************************************************************************
+-- switch database and search for schema
+SET @sqlCheck = N'USE {db}; SELECT @returnFromExec = SCHEMA_ID(''{schema}'')' 
+-- variables replacement
+SET @sqlCheck = REPLACE(@sqlCheck, '{db}', @dbname)
+SET @sqlCheck = REPLACE(@sqlCheck, '{schema}', @schema)
+-- execution and result return
+EXEC sp_executesql @sqlCheck, @params, @returnFromExec=@objExists OUTPUT
+
+if @objExists is null
+	BEGIN
+		BEGIN TRY
+			-- schema creation script
+			DECLARE @comm_create_schema varchar(50) = 'CREATE SCHEMA {schema}'
+			SET @sql = @comm_create_schema
+			-- variables replacement
+			SET @sql = REPLACE(@sql, '{schema}', @schema)	
+
+			SET @BigSQL = 'USE ' + @dbName + '; EXEC sp_executesql N''' + @sql + ''''
+			EXEC (@BigSQL) 
 			PRINT 'SCHEMA ' + @schema + ' Has been created!'
 		END TRY
 		BEGIN CATCH
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
 		END CATCH
 	END
--- < [MRWOLF] SCHEMA CREATION		*****************************************************************************************************************
+-- < SCHEMA CREATION		*************************************************************************************************************************
+RETURN
 
--- > [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
+-- > FUNCTION CREATION		*************************************************************************************************************************
 DECLARE @comm_create_function varchar(max)
-SET @function = '[fn_concat_column_names_fk]'
+SET @function = 'ufnConcatFkColumnNames'
 
 SET @comm_create_function =
 'CREATE FUNCTION {schema}.{function}
@@ -115,10 +161,11 @@ if OBJECT_ID(@schema +'.'+ @function) is null
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
 		END CATCH
 	END
--- < [fn_concat_column_names_fk] FUNCTION CREATION		*********************************************************************************************
+-- < FUNCTION CREATION		*************************************************************************************************************************
+RETURN
 
--- > [sp_exec_scripts_by_key] PROCEDURE CREATION		*********************************************************************************************
-SET @procedure = '[sp_exec_scripts_by_keys]'
+-- > PROCEDURE CREATION		*************************************************************************************************************************
+SET @procedure = 'uspExecScriptsByKeys'
 SET @comm_create_function =
 'CREATE PROCEDURE {schema}.{procedure}
 (
@@ -203,9 +250,9 @@ if OBJECT_ID(@schema +'.'+@procedure) is null
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
 		END CATCH
 	END
--- < [sp_exec_scripts_by_key] PROCEDURE CREATION		*********************************************************************************************
+-- < PROCEDURE CREATION		*************************************************************************************************************************
 
--- > [tbl_scripts] TABLE CREATION		*************************************************************************************************************
+-- > TABLE CREATION		*****************************************************************************************************************************
 DECLARE @comm_create_table_scripts varchar(max)
 
 SET @comm_create_table_scripts = 
@@ -238,11 +285,11 @@ if OBJECT_ID(@schema +'.'+@tbl_scripts) is null
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
 		END CATCH
 	END
--- < [tbl_scripts] TABLE CREATION		*************************************************************************************************************
+-- < TABLE CREATION		*****************************************************************************************************************************
 
--- > [v_foreign_key_cols] VIEW CREATION		*************************************************************************************************************
+-- > VIEW CREATION		*****************************************************************************************************************************
 DECLARE @comm_create_view_scripts varchar(max)
-SET @view = '[v_foreign_key_cols]'
+SET @view = 'vForeignKeyCols'
 
 SET @comm_create_view_scripts = 
 'create view {schema}.{view} as
@@ -260,7 +307,6 @@ left join sys.all_objects obj on (fkcol.constraint_object_id = obj.object_id)
 left join sys.tables tbl_child on (tbl_child.object_id = fkcol.parent_object_id)
 left join sys.tables tbl_parent on (tbl_parent.object_id = fkcol.referenced_object_id)
 '
-
 SET @sql = @comm_create_view_scripts
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{view}', @view)
@@ -274,7 +320,7 @@ if OBJECT_ID(@schema +'.'+@view) is null
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
 		END CATCH
 	END
--- < [v_foreign_key_cols] VIEW CREATION		*************************************************************************************************************
+-- < VIEW CREATION		*****************************************************************************************************************************
 
 
 -- ##################################################################################################################################################

@@ -9,7 +9,7 @@ Drop all the stored-procedures, functions, tables and views belonging to MRWOLF 
 -- ================================================================================================================================================*/
 BEGIN
 
-	DECLARE @schema varchar(128) = 'mrwolf'
+	DECLARE @schema varchar(128) = 'Jakodev'
 	DECLARE @object_name varchar(128)
 	DECLARE @object_type varchar(2)
 	DECLARE @sql varchar(max)
