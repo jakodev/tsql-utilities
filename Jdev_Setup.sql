@@ -13,7 +13,8 @@ Add the following items to the current database DB_NAME():
 - A new table named as the variable @tbl_scripts, used to save sql scripts;
 - A new function named ufnConcatFkColumnNames, used to concat column names belonging to specified foreign keys;
 - A new stored procedure named uspExecScriptsByKeys, used to run the scripts saved in @tbl_scripts;
-- A new view named vForeignKeyCols, for consulting purpose only
+- A new stored procedure named uspDropMe, used to remove all these items from the current database;
+- A new view named vForeignKeyCols, for consulting purpose only;
 
 -- ================================================================================================================================================*/
 
