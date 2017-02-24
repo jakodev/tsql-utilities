@@ -5,28 +5,19 @@
 -- Last Update: JAN-2017
 -- Version:		2.02.00
 -- Description:	
-Stash in ad hoc new schema called [mrwolf] some, hopefully useful, features to stop arguing with sql server. 
-It comes with extra features appended
+Create a new DATABASE named @dbname and attach to it the following items:
+- A new schema named @schema
+
+
+In the current database (DB_NAME()) attach the followin items:
+- A new schema named @schema
 --------------------------------------------------------------------------------------------------------------------------
-This first release start with an utility to drop/create a table referenced by one or more foreign key. This code
-provide an automatic mechanism to save to code to rebuild that foreign after thier dropping. Of course the code rebuild
-the table shuold be provided by YOU, this utility cannot read your mind ;)
+
 -- ================================================================================================================================================*/
 
 -- ##################################################################################################################################################
 --						GLOBAL VARIABLES						
 /* DON'T TOUCH THESE VARIABLES */											
-
-
---DECLARE @schema varchar(128) = 'Jakodev'
---DECLARE @sql varchar(max)
---DECLARE @function varchar(128)
---DECLARE @procedure varchar(128)
---DECLARE @view varchar(128)
---DECLARE @tbl_scripts varchar(50) = 'tScripts'
--- ##################################################################################################################################################
-
--- > CREATE DATABASE	*****************************************************************************************************************************
 DECLARE @dbname varchar(128) = 'JakodevUtilities'
 DECLARE @schema varchar(128) = 'Jakodev'
 DECLARE @sql varchar(max)
@@ -36,11 +27,13 @@ DECLARE @view varchar(128)
 DECLARE @tbl_scripts varchar(50) = 'tScripts'
 DECLARE @comm_create_database varchar(200) = 'CREATE DATABASE {db}'
 
+-- variables to handle EXEC return value
 DECLARE @sqlCheck nvarchar(500)
 DECLARE @params nvarchar(500) = N'@returnFromExec int output'
 DECLARE @objExists int
+-- ##################################################################################################################################################
 
-
+-- > CREATE DATABASE	*****************************************************************************************************************************
 SET	@sql = @comm_create_database
 SET @sql = REPLACE(@sql, '{db}', @dbname)
 if DB_ID(@dbname) is null
@@ -59,31 +52,51 @@ DECLARE @BigSQL varchar(max)
 
 
 -- > SCHEMA CREATION		*************************************************************************************************************************
--- switch database and search for schema
+-- switch database and search for the schema
 SET @sqlCheck = N'USE {db}; SELECT @returnFromExec = SCHEMA_ID(''{schema}'')' 
--- variables replacement
 SET @sqlCheck = REPLACE(@sqlCheck, '{db}', @dbname)
 SET @sqlCheck = REPLACE(@sqlCheck, '{schema}', @schema)
--- execution and result return
 EXEC sp_executesql @sqlCheck, @params, @returnFromExec=@objExists OUTPUT
 
-if @objExists is null
-	BEGIN
-		BEGIN TRY
-			-- schema creation script
-			DECLARE @comm_create_schema varchar(50) = 'CREATE SCHEMA {schema}'
-			SET @sql = @comm_create_schema
-			-- variables replacement
-			SET @sql = REPLACE(@sql, '{schema}', @schema)	
+DECLARE @comm_create_schema varchar(50) = 'CREATE SCHEMA {schema}'
+SET @sql = @comm_create_schema
+SET @sql = REPLACE(@sql, '{schema}', @schema)	
 
-			SET @BigSQL = 'USE ' + @dbName + '; EXEC sp_executesql N''' + @sql + ''''
-			EXEC (@BigSQL) 
-			PRINT 'SCHEMA ' + @schema + ' Has been created!'
-		END TRY
-		BEGIN CATCH
-			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
-		END CATCH
-	END
+-- if the schema doesn't exist in @dbname database
+if @objExists is null
+BEGIN
+	BEGIN TRY
+		SET @BigSQL = 'USE ' + @dbName + '; EXEC sp_executesql N''' + @sql + ''''
+		EXEC (@BigSQL) 
+		PRINT 'SCHEMA ' + @schema + ' has been created in ' + @dbname + ' database' 
+	END TRY
+	BEGIN CATCH
+		PRINT 'Cannot create schema ' + @schema + ' in ' + @dbname + ' database!' 
+		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+	END CATCH
+END
+ELSE
+BEGIN
+	PRINT 'The schema ' + @schema + ' was already present in ' + @dbname + ' database.' 
+END
+
+-- if the schema doesn't exist in current database
+if SCHEMA_ID(@schema) is null
+BEGIN
+	BEGIN TRY
+		EXEC sp_sqlexec @sql
+		PRINT 'SCHEMA ' + @schema + ' has been created in ' + DB_NAME() + ' database!'
+	END TRY
+	BEGIN CATCH
+		PRINT 'Cannot create schema ' + @schema + ' in ' + DB_NAME() + ' database!' 
+		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+	END CATCH
+END
+ELSE
+BEGIN
+	PRINT 'The schema ' + @schema + ' was already present in ' + @dbname + ' database.' 
+END
+
 -- < SCHEMA CREATION		*************************************************************************************************************************
 RETURN
 
