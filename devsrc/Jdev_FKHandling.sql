@@ -1,5 +1,6 @@
-/*-- ================================================================================================================================================
---	Name: JAKODEV-FEATURE-1
+-- ==================================================================================================================================================
+/*
+--	Name: JAKODEV-TABLE-REBUILD
 --	JAKODEV-UTILITIES Compatibility: 0.90.00
 --	Author:			Jakodev
 --	Create date:	JAN-2017
@@ -17,7 +18,8 @@
 	@TableToRebuild		> insert the name of the table you want to drop/create safely
 	@Debugmode			> execute the code without performs any FK/TABLE drop/create
 	@comm_create_table	> You can specify here the columns and constraint for the table to rebuild. Write your code <BETWEEN_THIS_TAG>
--- ================================================================================================================================================*/
+*/
+-- ==================================================================================================================================================
 -- ##################################################################################################################################################
 --						GLOBAL VARIABLES						
 /* DON'T TOUCH THESE VARIABLES */											
@@ -27,11 +29,15 @@ DECLARE @procedure varchar(128) = 'uspExecScriptsByKeys'
 -- ##################################################################################################################################################
 
 -- CUSTOM DECLARATIONS ******************************************************************************************************************************
-DECLARE	@TableToRebuild varchar(384) = '[IntroToEF6].[store].[Products]'
+DECLARE @tableToRebuildDatabase varchar(128) = NULL -- NULL means current database
+DECLARE @tableToRebuildSchema varchar(128) = 'store'
+DECLARE	@tableToRebuildTable varchar(128) = 'Products'
+DECLARE @tableToRebuild varchar(384) = COALESCE(@tableToRebuildDatabase, DB_NAME()) + '.' + @tableToRebuildSchema + '.' + @tableToRebuildTable
+
 DECLARE @Debugmode bit = 'false'
 DECLARE @comm_create_table varchar(max) =
 '
-CREATE TABLE {table} (
+CREATE TABLE {usp_table} (
 	/*<BETWEEN_THIS_TAG>*/
 
 	[Id] [int] IDENTITY(1,1) NOT NULL,
@@ -71,7 +77,7 @@ from (
 	-- query for create foreign keys
 	SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
 	,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-	,		OBJECT_NAME(OBJECT_ID(@TableToRebuild)) as "sql_key"
+	,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
 	,		'ALTER TABLE ' + '['+OBJECT_SCHEMA_NAME(fk.object_id)+'].['+ OBJECT_NAME(fk.parent_object_id) + ']' 
 	+		' ADD CONSTRAINT ' + '[' + OBJECT_NAME(object_id) + ']'
 	+		' FOREIGN KEY(' +   [JakodevUtils].[ufnConcatFkColumnNames](fk.object_id, fk.parent_object_id, 'C') + ')'
@@ -80,18 +86,18 @@ from (
 	+		CASE WHEN fk.delete_referential_action_desc != 'NO_ACTION' THEN ' ON DELETE ' + REPLACE(fk.delete_referential_action_desc, '_', ' ') ELSE '' END COLLATE database_default as "sql_string"
 	,		'ADD_FOREIGN_KEY_CONSTRAINT' as "sql_type"
 	FROM sys.foreign_keys fk
-	WHERE fk.referenced_object_id = OBJECT_ID(@TableToRebuild) or fk.parent_object_id = OBJECT_ID(@TableToRebuild)
+	WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
 
 	UNION ALL
 
 	-- query for drop foreign keys
 	SELECT	'['+OBJECT_SCHEMA_NAME(fk.object_id)+']' as "obj_schema"
 	,		'['+ OBJECT_NAME(fk.parent_object_id) + ']' as "obj_name"
-	,		OBJECT_NAME(OBJECT_ID(@TableToRebuild)) as "sql_key"
+	,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
 	,		'ALTER TABLE ' + '[' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + ']' + '.[' + OBJECT_NAME(fk.parent_object_id) + '] DROP CONSTRAINT '+fk.name COLLATE database_default as "sql_string"
 	,		'DROP_FOREIGN_KEY_CONSTRAINT' as sql_type 
 	FROM sys.foreign_keys fk
-	WHERE fk.referenced_object_id = OBJECT_ID(@TableToRebuild) or fk.parent_object_id = OBJECT_ID(@TableToRebuild)
+	WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
 ) mainquery
 END TRY
 BEGIN CATCH
@@ -107,8 +113,8 @@ END CATCH
 
 /*
 Following code will perform:
-1) DROP FOREIGN KEYS (connected to @TableToRebuild)
-2) DROP TABLE (@TableToRebuild)
+1) DROP FOREIGN KEYS (connected to @tableToRebuild)
+2) DROP TABLE (@tableToRebuild)
 3) CREATE TABLE: <this part shoul be edited in order to apply desidered modification>
 4) RESTORE FOREIGN KEYS : If all gone well, all the fk will be restored by the script saved before, do you rememeber?
 */
@@ -117,7 +123,7 @@ Following code will perform:
 SET @sql = 'EXEC {schema}.{procedure} @sql_key=''{table}'', @sql_type=''DROP_FOREIGN_KEY_CONSTRAINT'''
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToRebuild)))
+SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
 IF @Debugmode = 'false'
 BEGIN
 	-- try/catch handled by called procedure
@@ -129,16 +135,16 @@ ELSE
 -- < (1) DROP THE FOREIGN KEYS	*********************************************************************************************************************
 
 -- > (2) DROP TABLE		*****************************************************************************************************************************
-DECLARE @comm_drop_table varchar(max) = 'DROP TABLE {table}'
+DECLARE @comm_drop_table varchar(max) = 'DROP TABLE {usp_table}'
 SET @sql = @comm_drop_table
-SET @sql = REPLACE(@sql, '{table}', @TableToRebuild)
-IF OBJECT_ID(@TableToRebuild) is not null
+SET @sql = REPLACE(@sql, '{usp_table}', @tableToRebuild)
+IF OBJECT_ID(@tableToRebuild) is not null
 BEGIN
 	IF @Debugmode = 'false'
 	BEGIN
 		BEGIN TRY
 			EXEC sp_sqlexec @sql
-			PRINT 'Table ' + @TableToRebuild + ' has been dropped successful!'
+			PRINT 'Table ' + @tableToRebuild + ' has been dropped successful!'
 		END TRY
 		BEGIN CATCH
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
@@ -151,14 +157,14 @@ END
 
 -- > (3) CREATE TABLE	*****************************************************************************************************************************
 SET @sql = @comm_create_table
-SET @sql = REPLACE(@sql, '{table}', @TableToRebuild)
-IF OBJECT_ID(@TableToRebuild) is null
+SET @sql = REPLACE(@sql, '{usp_table}', @tableToRebuild)
+IF OBJECT_ID(@tableToRebuild) is null
 BEGIN
 	IF @Debugmode = 'false'
 	BEGIN
 		BEGIN TRY
 			EXEC sp_sqlexec @sql
-			PRINT 'Table ' + @TableToRebuild + ' has been created successful!'
+			PRINT 'Table ' + @tableToRebuild + ' has been created successful!'
 		END TRY
 		BEGIN CATCH
 			PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
@@ -175,7 +181,7 @@ ELSE
 SET @sql = 'EXEC {schema}.{procedure} @sql_key=''{table}'', @sql_type=''ADD_FOREIGN_KEY_CONSTRAINT'''
 SET @sql = REPLACE(@sql, '{schema}', @schema)
 SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@TableToRebuild)))
+SET @sql = REPLACE(@sql, '{table}', OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
 IF @Debugmode = 'false'
 BEGIN
 	-- try/catch handled by called procedure
@@ -193,7 +199,7 @@ ELSE
 DECLARE @errors int
 SELECT @errors = COUNT(*)
 FROM [JakodevUtils].[SqlScript] 
-WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@TableToRebuild)) AND sql_type IN ('ADD_FOREIGN_KEY_CONSTRAINT','DROP_FOREIGN_KEY_CONSTRAINT')
+WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@tableToRebuild)) AND sql_type IN ('ADD_FOREIGN_KEY_CONSTRAINT','DROP_FOREIGN_KEY_CONSTRAINT')
 
 IF @errors > 0
 	BEGIN
