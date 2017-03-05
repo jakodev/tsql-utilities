@@ -3,11 +3,11 @@
 -- Name: JAKODEV-UTILITIES
 -- Author:		Jakodev
 -- Create date: JAN-2017
--- Last Update: FEB-2017
+-- Last Update: MAR-2017
 -- Version:		0.91.00
 -- Description:	
-I've begun this tiny program to easily handle the DROP/CREATE TABLE procedure when one o more Foreign Keys are referencing to it. So, to handle this
-intention I certainly need to add some item like tables, functions, stored procedures etc.. in the current database. And that is what this script do
+I've begun this tiny program to easily handle the DROP/CREATE TABLE procedure when one o more Foreign Keys are referencing to it. So, to accomplish this
+task I need to add some items like tables, functions, stored procedures etc.. in the target database. And that is what this setup script do
 
 Add a new schema named as the variable @schema (customizable) to the <current database> (DB_NAME()).
 Into this new schema add the following items:
@@ -22,42 +22,40 @@ Into this new schema add the following items:
 -- ==================================================================================================================================================
 
 -- You can choose your preferred name (remember this choice) or use the default name
-DECLARE @schema varchar(128) = 'JakodevUtils'
-
+DECLARE @schema nvarchar(128) = N'JakodevUtilities'
 
 
 -- ##################################################################################################################################################
-/* DON'T TOUCH THESE VARIABLES */											
-DECLARE @sql varchar(max)
-DECLARE @function varchar(128)
-DECLARE @procedure varchar(128)
-DECLARE @view varchar(128)
-DECLARE @tbl_scripts varchar(50) = 'SqlScript'
+DECLARE @sql nvarchar(max)
+DECLARE @function nvarchar(128)
+DECLARE @procedure nvarchar(128)
+DECLARE @view nvarchar(128)
+DECLARE @tableSqlScripts nvarchar(50) = N'SqlScript'
 DECLARE @forceItemCreation bit = 'false'	-- <da implementare>!!
 
-DECLARE @comm_create_function varchar(max)
-DECLARE @comm_create_procedure varchar(max)
+DECLARE @comm_create_function nvarchar(max)
+DECLARE @comm_create_procedure nvarchar(max)
 -- ##################################################################################################################################################
 
 -- > [@schema] SCHEMA CREATION		*****************************************************************************************************************
-DECLARE @comm_create_schema varchar(50) = 'CREATE  SCHEMA {schema}'
+DECLARE @comm_create_schema varchar(50) = N'CREATE  SCHEMA {schema}'
 
 SET @sql = @comm_create_schema
-SET @sql = REPLACE(@sql, '{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
 if SCHEMA_ID(@schema) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'Schema [' + @schema + '] has been created in [' + DB_NAME() + '] database.'
+		PRINT N'Schema [' + @schema + N'] has been created in [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the Schema [' + @schema + '] in [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the Schema [' + @schema + N'] in [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'Schema [' + @schema + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: ' + N'Schema [' + @schema + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [@schema] SCHEMA CREATION		*****************************************************************************************************************
 
@@ -65,66 +63,68 @@ END
 DECLARE @comm_create_table_scripts varchar(max)
 
 SET @comm_create_table_scripts = 
-'
+N'
 -- =============================================
 -- Author:		Jakodev
 -- Create date: JAN-2017
--- Description:	Table used to store sql script to be executed and save the execution result
+-- Last update:	FEB-2017
+-- Version:		0.91.00
+-- Description:	Table used to store sql script to be executed
 -- =============================================
 
 CREATE TABLE {schema}.{table} 
 	(	
-		obj_schema varchar(128) not null
-	,	obj_name varchar(128) not null
-	,	sql_key varchar(128) not null
-	,	sql_string varchar(1000) not null
-	,	sql_type varchar(50) not null
-	,	sql_hash varchar(100) not null
+		obj_schema nvarchar(128) not null
+	,	obj_name nvarchar(128) not null
+	,	sql_key nvarchar(128) not null
+	,	sql_string nvarchar(1000) not null
+	,	sql_type nvarchar(50) not null
+	,	sql_hash nvarchar(100) not null
 	,	sql_status int DEFAULT 0
-	,	sql_status_message varchar(500) DEFAULT ''Not executed yet''
+	,	sql_status_message nvarchar(500) DEFAULT ''Not executed yet''
 	,	Timestamp timestamp
 	)
 	
-ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_<schema><table> PRIMARY KEY (sql_hash)
+ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_{table} PRIMARY KEY (sql_hash)
 
 -- add description about column sql_status
-EXEC sys.sp_addextendedproperty @name=N''MS_Description'', @value=N''0=Never Run; 1=Run Successful; -x=Error code'' , @level0type=N''SCHEMA'',@level0name=N''<schema>'', @level1type=N''TABLE'',@level1name=N''<table>'', @level2type=N''COLUMN'',@level2name=N''sql_status''
+EXEC sys.sp_addextendedproperty @name=N''MS_Description'', @value=N''0=Never Run; 1=Run Successful; -x=Error code'' , @level0type=N''SCHEMA'',@level0name=N''{schema}'', @level1type=N''TABLE'',@level1name=N''{table}'', @level2type=N''COLUMN'',@level2name=N''sql_status''
 '
 
 SET @sql = @comm_create_table_scripts
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{table}', @tbl_scripts)
-SET @sql = REPLACE(@sql, '<schema>', REPLACE(REPLACE(@schema, '[',''), ']','')) 
-SET @sql = REPLACE(@sql, '<table>', REPLACE(REPLACE(@tbl_scripts, '[',''), ']',''))
-if OBJECT_ID(@schema +'.'+@tbl_scripts) is null
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
+if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'Table [' + @schema + '].[' + @tbl_scripts + '] has been created in the [' + DB_NAME() + '] database.'
+		PRINT N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the Table [' + @schema +'].['+@tbl_scripts + '] in the [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the Table [' + @schema + N'].[' + @tableSqlScripts + N'] in the [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'Table [' + @schema + '].[' + @tbl_scripts + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: ' + N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [@tbl_scripts] TABLE CREATION		*************************************************************************************************************
 
 -- > [ufnConcatFkColumnNames] FUNCTION CREATION		*************************************************************************************************
-SET @function = 'ufnConcatFkColumnNames'
+SET @function = N'ufnConcatFkColumnNames'
 SET @comm_create_function =
-N'-- =============================================
+N'
+-- =============================================
 -- Author:		Jakodev
 -- Create date: JAN-2017
--- Description:	
--- Returns a concatenated list of Foreign Key''s column names.
--- if @tableIdType = ''C'' returns the constraint columns (fk child columns)
--- if @tableIdType = ''P'' returns the referenced columns (fk parent columns)
--- @tableIdRef, the table referenced by the foreign key identified by its object_id
--- @tableId, object_id of parent table or child table, the value passed here must be in according with arg @tableIdType
+-- Last update:	MAR-2017
+-- Version:		0.90.00
+-- Description:	Returns a concatenated list of Foreign Key''s column names.
+-- Params:		@tableIdRef, the table referenced by the foreign key identified by its object_id
+--				@tableId, object_id of parent table or child table, the value passed here must be in according with arg @tableIdType
+--				@tableIdType, allow two only values	> ''C'' returns the constraint columns (fk child columns)	>> @tableId must be the parent_object_id
+--													> ''P'' returns the referenced columns (fk parent columns)	>> @tableId must be the referenced_object_id
 
 -- Note: 
 -- in SQLSERVER the child table is identified by the field parent_object_id
@@ -171,7 +171,6 @@ BEGIN
 		SET @index = @index + 1
 
 		FETCH NEXT FROM c_cols INTO @parentCol, @referencedCol
-	
 	END
 
 	CLOSE c_cols
@@ -182,29 +181,40 @@ BEGIN
 END
 '
 SET @sql = @comm_create_function
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{function}', @function)
-if OBJECT_ID(@schema +'.'+ @function) is null
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{function}', @function)
+if OBJECT_ID(@schema + N'.' + @function) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'Function [' + @schema + '].[' + @function + '] has been created in the [' + DB_NAME() + '] database.'
+		PRINT N'Function [' + @schema + N'].[' + @function + N'] has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the Function [' + @schema +'].['+@function + '] in the [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the Function [' + @schema + N'].[' + @function + N'] in the [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'Function [' + @schema + '].[' + @function + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: ' + N'Function [' + @schema + N'].[' + @function + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [ufnConcatFkColumnNames] FUNCTION CREATION		*************************************************************************************************
 
 -- > [uspExecScriptsByKeys] PROCEDURE CREATION		*************************************************************************************************
-SET @procedure = 'uspExecScriptsByKeys'
+SET @procedure = N'uspExecScriptsByKeys'
 SET @comm_create_procedure =
-'CREATE PROCEDURE {schema}.{procedure}
+N'
+-- =============================================
+-- Author:		Jakodev
+-- Create date: JAN-2017
+-- Last update:	FEB-2017
+-- Version:		0.91.00
+-- Description:	Execute the scripts stored into the {table} table based on the filters passed as arguments. 
+--				Each argument different from NULL or '''' is used as AND operator in the where clause. 
+--				Only scripts in status 0 will be executed, otherwise a warning will be printed.
+-- =============================================
+
+CREATE PROCEDURE {schema}.{procedure}
 (
 	@obj_schema varchar(128) = null,
 	@obj_name varchar(128) = null,
@@ -238,7 +248,7 @@ BEGIN
 	FETCH NEXT FROM sql_script_cursor INTO @sql, @hash, @status
 	WHILE (@@FETCH_STATUS = 0)
 	BEGIN
-		
+
 		BEGIN TRY
 			
 			IF @status = 1
@@ -267,39 +277,48 @@ BEGIN
 		END CATCH
 		
 		FETCH NEXT FROM sql_script_cursor INTO @sql, @hash, @status
+
 	END
+
 	CLOSE sql_script_cursor
 	DEALLOCATE sql_script_cursor
-
-	
 
 END'
 
 SET @sql = @comm_create_procedure
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', @tbl_scripts)
-if OBJECT_ID(@schema +'.'+@procedure) is null
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
+SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
+if OBJECT_ID(@schema + N'.' + @procedure) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'Stored Procedure [' + @schema + '].[' + @procedure + '] has been created in the [' + DB_NAME() + '] database.'
+		PRINT N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the Stored Procedure [' + @schema + '].[' + @procedure + '] in the [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the Stored Procedure [' + @schema + N'].[' + @procedure + N'] in the [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'Stored Procedure [' + @schema + '].[' + @procedure + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: '+ N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [uspExecScriptsByKeys] PROCEDURE CREATION		*************************************************************************************************
 
 -- > [uspDropMe] PROCEDURE CREATION		*************************************************************************************************************
-SET @procedure = 'uspDropMe'
+SET @procedure = N'uspDropMe'
 SET @comm_create_procedure =
-'CREATE PROCEDURE {schema}.{procedure}
+N'
+-- =============================================
+-- Author:		Jakodev
+-- Create date: FEB-2017
+-- Last update:	MAR-2017
+-- Version:		0.91.00
+-- Description:	Drop all the items (tables, procedures, functions..) belonging the schema {schema} and the schema itself.
+-- =============================================
+
+CREATE PROCEDURE {schema}.{procedure}
 (
 	@schema varchar(128) = ''{schema}''
 )
@@ -308,7 +327,6 @@ AS
 
 BEGIN
 
-	
 	DECLARE @object_name varchar(128)
 	DECLARE @object_type varchar(2)
 	DECLARE @sql varchar(max)
@@ -362,37 +380,49 @@ BEGIN
 			PRINT ''SCHEMA '' + @schema + '' dropped!''
 		END
 		
-		
 END
 '
 
 SET @sql = @comm_create_procedure
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-if OBJECT_ID(@schema +'.'+@procedure) is null
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
+if OBJECT_ID(@schema + N'.' + @procedure) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'Stored Procedure [' + @schema + '].[' + @procedure + '] has been created in the [' + DB_NAME() + '] database.'
+		PRINT N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the Stored Procedure [' + @schema + '].[' + @procedure + '] in the [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the Stored Procedure [' + @schema + N'].[' + @procedure + N'] in the [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'Stored Procedure [' + @schema + '].[' + @procedure + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: ' + N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [uspDropMe] PROCEDURE CREATION		*************************************************************************************************************
 
 -- > [uspReset] PROCEDURE CREATION		*************************************************************************************************************
-SET @procedure = 'uspReset'
+SET @procedure = N'uspReset'
 SET @comm_create_procedure =
-'CREATE PROCEDURE {schema}.{procedure} 
+N'
+-- =============================================
+-- Author:		Jakodev
+-- Create date: MAR-2017
+-- Last update:	MAR-2017
+-- Version:		0.91.00
+-- Description:	Reset or truncate the table {table}
+-- Params:		@method, allows two olny values > ''R'' > Reset (set status 0) all the scripts;
+--												> ''T'' > Truncate the table.	
+-- =============================================
+
+CREATE PROCEDURE {schema}.{procedure} 
+
 	@method varchar(1) = ''R''
 	
 AS
+
 BEGIN
 
 	if @method = ''T''
@@ -411,63 +441,85 @@ END
 '
 
 SET @sql = @comm_create_procedure
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-SET @sql = REPLACE(@sql, '{table}', @tbl_scripts)
-if OBJECT_ID(@schema +'.'+@procedure) is null
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
+SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
+if OBJECT_ID(@schema + N'.' + @procedure) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'Stored Procedure [' + @schema + '].[' + @procedure + '] has been created in the [' + DB_NAME() + '] database.'
+		PRINT N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the Stored Procedure [' + @schema + '].[' + @procedure + '] in the [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the Stored Procedure [' + @schema + N'].[' + @procedure + N'] in the [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'Stored Procedure [' + @schema + '].[' + @procedure + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: ' + N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [uspReset] PROCEDURE CREATION		*************************************************************************************************************
 
--- > [uspRebuildTable] PROCEDURE CREATION		*************************************************************************************************
-SET @procedure = 'uspRebuildTable'
+-- > [uspRebuildTable] PROCEDURE CREATION		*****************************************************************************************************
+SET @procedure = N'uspRebuildTable'
 SET @comm_create_procedure =
-N'CREATE PROCEDURE {schema}.{procedure}
-	-- Add the parameters for the stored procedure here
-	@tableToRebuildDatabase varchar(128) = NULL, -- NULL means current database
-	@tableToRebuildSchema varchar(128),
-	@tableToRebuildTable varchar(128),
-	@tableToRebuildSql varchar(max),
-	@Debugmode bit = ''true''
+N'
+-- =============================================
+-- Author:		Jakodev
+-- Create date: JAN-2017
+-- Last update:	MAR-2017
+-- Version:		0.91.00
+-- Description:	Dropping and Creation of an existing table and, at the same time, takes care of all the attached foreign keys. 
+-- Goal is performed in 5 steps:
+-- 1) Analisys and saving DDL of all foreign keys;
+-- 2) Drop of the Foreign Keys;
+-- 3) Drop of the Table;
+-- 4) Creation of the Table (you must provide as parameter only the code to add the columns);
+-- 5) Creation of the Foreign Keys saved before;
+
+
+-- Params:	@database (optional): the database where reside the table to rebuild;
+--			@schema: the schema of the table;
+--			@table: the table to rebuild;
+--			@DDL: Columns DDL (you must provide only the DDL to add the columns)
+--			@debugMode: allow only two values	> ''true'', no drop performed. To use for checking if all the necessary scripts will be generated;
+--												> ''false'', performs all the tasks that the procedure is intended to do.
+-- =============================================
+
+CREATE PROCEDURE {schema}.{procedure}
+
+	@database varchar(128) = NULL, -- NULL means current database
+	@schema varchar(128),
+	@table varchar(128),
+	@DDL varchar(max),
+	@debugMode bit = ''true''
 
 AS
 BEGIN
-	IF @Debugmode = ''true''
+	IF @debugMode = ''true''
 		PRINT ''Debug mode enabled, no changes will be saved''
 
-	IF @tableToRebuildSchema = '''' or @tableToRebuildSchema is null
+	IF COALESCE(@schema,'''') = ''''
 	BEGIN
 		PRINT ''Schema cannot be empty or null''
-		RETURN
+		RETURN -1
 	END
 
-	IF @tableToRebuildTable = '''' or @tableToRebuildTable is null
+	IF COALESCE(@table, '''') = ''''
 	BEGIN
 		PRINT ''Table cannot be empty or null''
-		RETURN
+		RETURN -1
 	END
 	
 	DECLARE @sql varchar(max)
-	DECLARE @schema varchar(128) = ''{schema}''
-		
-	DECLARE @tableToRebuild varchar(384) = COALESCE(@tableToRebuildDatabase, DB_NAME()) + ''.'' + @tableToRebuildSchema + ''.'' + @tableToRebuildTable	
-	DECLARE @comm_create_table varchar(max) = N''CREATE TABLE {usp_table} '' + @tableToRebuildSql
+	DECLARE @tableToRebuild varchar(384) = COALESCE(@database, DB_NAME()) + ''.'' + @schema + ''.'' + @table	
+	DECLARE @comm_create_table varchar(max) = N''CREATE TABLE {usp_table} ('' + @DDL + '')''
+	DECLARE @returnValue int = 0
 	
-	-- > BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
+	-- > (1) ANALISYS AND SAVING FK''s DDL **********************************************************************************************************
 	BEGIN TRY
-	INSERT INTO [{schema}].[SqlScript] (obj_schema, obj_name, sql_key, sql_string, sql_type, sql_hash)
+	INSERT INTO [{schema}].[{table}] (obj_schema, obj_name, sql_key, sql_string, sql_type, sql_hash)
 	select	mainquery.obj_schema
 	,		mainquery.obj_name
 	,		mainquery.sql_key
@@ -502,6 +554,7 @@ BEGIN
 	) mainquery
 	END TRY
 	BEGIN CATCH
+		SET @returnValue = @returnValue - 1
 		DECLARE @err_num INT = ERROR_NUMBER()
 		DECLARE @err_msg NVARCHAR(4000) = ERROR_MESSAGE()
 		PRINT ''Something gone wrong! the insert statement raised the following error:''
@@ -510,20 +563,12 @@ BEGIN
 			PRINT ''Maybe you''''ve run this procedure in debug mode more than once without reset the environment between the first and the last execution''
 			PRINT ''''
 	END CATCH
-	-- < BUILDING SCRIPTS FOR DROP and CREATE FOREIGN KEYS **********************************************************************************************
+	-- < (1) ANALISYS AND SAVING FK''s DDL **********************************************************************************************************
 
-	/*
-	Following code will perform:
-	1) DROP FOREIGN KEYS (connected to @tableToRebuild)
-	2) DROP TABLE (@tableToRebuild)
-	3) CREATE TABLE: <this part shoul be edited in order to apply desidered modification>
-	4) RESTORE FOREIGN KEYS : If all gone well, all the fk will be restored by the script saved before, do you rememeber?
-	*/
-	
-	-- > (1) DROP THE FOREIGN KEYS	*********************************************************************************************************************
+	-- > (2) DROP THE FOREIGN KEYS	*****************************************************************************************************************
 	SET @sql = ''EXEC {schema}.uspExecScriptsByKeys @sql_key=''''{usp_table}'''', @sql_type=''''DROP_FOREIGN_KEY_CONSTRAINT''''''
 	SET @sql = REPLACE(@sql, ''{usp_table}'', OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
-	IF @Debugmode = ''false''
+	IF @debugMode = ''false''
 	BEGIN
 		-- try/catch handled by called procedure
 		EXEC sp_sqlexec @sql
@@ -531,42 +576,43 @@ BEGIN
 	ELSE
 		PRINT ''DROP FOREIGN KEYS (Debug mode enabled)''
 
-	-- < (1) DROP THE FOREIGN KEYS	*********************************************************************************************************************
+	-- < (2) DROP THE FOREIGN KEYS	*****************************************************************************************************************
 
-	
-	-- > (2) DROP TABLE		*****************************************************************************************************************************
+	-- > (3) DROP TABLE		*************************************************************************************************************************
 	DECLARE @comm_drop_table varchar(max) = ''DROP TABLE {usp_table}''
 	SET @sql = @comm_drop_table
 	SET @sql = REPLACE(@sql, ''{usp_table}'', @tableToRebuild)
 	IF OBJECT_ID(@tableToRebuild) is not null
 	BEGIN
-		IF @Debugmode = ''false''
+		IF @debugMode = ''false''
 		BEGIN
 			BEGIN TRY
 				EXEC sp_sqlexec @sql
 				PRINT ''Table '' + @tableToRebuild + '' has been dropped successful!''
 			END TRY
 			BEGIN CATCH
+				SET @returnValue = @returnValue - 1
 				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
 			END CATCH
 		END	
 		ELSE
-		PRINT ''DROP TABLE (Debug mode enabled)''
+			PRINT ''DROP TABLE (Debug mode enabled)''
 	END
-	-- < (2) DROP TABLE		*****************************************************************************************************************************
+	-- < (3) DROP TABLE		*************************************************************************************************************************
 	
-	-- > (3) CREATE TABLE	*****************************************************************************************************************************
+	-- > (4) CREATE TABLE	*************************************************************************************************************************
 	SET @sql = @comm_create_table
 	SET @sql = REPLACE(@sql, ''{usp_table}'', @tableToRebuild)
 	IF OBJECT_ID(@tableToRebuild) is null
 	BEGIN
-		IF @Debugmode = ''false''
+		IF @debugMode = ''false''
 		BEGIN
 			BEGIN TRY
 				EXEC sp_sqlexec @sql
 				PRINT ''Table '' + @tableToRebuild + '' has been created successful!''
 			END TRY
 			BEGIN CATCH
+				SET @returnValue = @returnValue - 1
 				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
 			END CATCH
 		END
@@ -575,68 +621,70 @@ BEGIN
 	END
 	ELSE
 		PRINT ''CREATE TABLE ignored, table already exists!''
-	-- < (3) CREATE TABLE	*****************************************************************************************************************************
+	-- < (4) CREATE TABLE	*************************************************************************************************************************
 	
-	-- > (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
+	-- > (5) FOREIGN KEYS RESTORING		*************************************************************************************************************
 	SET @sql = ''EXEC {schema}.uspExecScriptsByKeys @sql_key=''''{usp_table}'''', @sql_type=''''ADD_FOREIGN_KEY_CONSTRAINT''''''
 	SET @sql = REPLACE(@sql, ''{usp_table}'', OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
-	IF @Debugmode = ''false''
+	IF @debugMode = ''false''
 	BEGIN
 		-- try/catch handled by called procedure
 		EXEC sp_sqlexec @sql
 	END
 	ELSE
-		BEGIN
-			PRINT ''RESTORE FOREIGN KEYS (Debug mode enabled)''
-			SET @sql = ''SELECT * FROM [{schema}].[SqlScript]''
-			EXEC sp_sqlexec @sql
-		END
-	-- < (4) RESTORE THE FOREIGN KEYS		*************************************************************************************************************
+	BEGIN
+		PRINT ''RESTORE FOREIGN KEYS (Debug mode enabled)''
+		SET @sql = ''SELECT * FROM [{schema}].[{table}]''
+		EXEC sp_sqlexec @sql
+	END
+	-- < (5) FOREIGN KEYS RESTORING		*************************************************************************************************************
 
 	DECLARE @errors int
 	SELECT @errors = COUNT(*)
-	FROM [{schema}].[SqlScript] 
+	FROM [{schema}].[{table}] 
 	WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@tableToRebuild)) AND sql_type IN (''ADD_FOREIGN_KEY_CONSTRAINT'',''DROP_FOREIGN_KEY_CONSTRAINT'')
 
 	IF @errors > 0
-		BEGIN
-			PRINT ''ATTENTION: check for the table SqlScript (or the ''''Results'''' panel), some errors was raised!''
-			SET @sql = ''SELECT * FROM [{schema}].[SqlScript] WHERE sql_status < 0''
-			EXEC sp_sqlexec @sql
-		END
+	BEGIN
+		PRINT ''ATTENTION: check for the table {table} (or the ''''Results'''' panel), some errors was raised!''
+		SET @sql = ''SELECT * FROM [{schema}].[{table}] WHERE sql_status < 0''
+		EXEC sp_sqlexec @sql
+	END
 		
+	RETURN @returnValue
 -- **************************************************************************************************************************************************
 
 END
 '
 
 SET @sql = @comm_create_procedure
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{procedure}', @procedure)
-if OBJECT_ID(@schema +'.'+@procedure) is null
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
+SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
+if OBJECT_ID(@schema + N'.' + @procedure) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'Stored Procedure [' + @schema + '].[' + @procedure + '] has been created in the [' + DB_NAME() + '] database.'
+		PRINT N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the Stored Procedure [' + @schema + '].[' + @procedure + '] in the [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the Stored Procedure [' + @schema + N'].[' + @procedure + N'] in the [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'Stored Procedure [' + @schema + '].[' + @procedure + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: ' + N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
--- < [uspRebuildTable] PROCEDURE CREATION		*************************************************************************************************
-
+-- < [uspRebuildTable] PROCEDURE CREATION		*****************************************************************************************************
 
 -- > [vForeignKeyCols] VIEW CREATION		*********************************************************************************************************
 DECLARE @comm_create_view_scripts varchar(max)
-SET @view = 'vForeignKeyCols'
+SET @view = N'vForeignKeyCols'
 
 SET @comm_create_view_scripts = 
-'create view {schema}.{view} as
+N'
+create view {schema}.{view} as
 select SCHEMA_NAME(obj.schema_id) as "Schema"
 ,	fkcol.constraint_object_id as "Foreign Key Id", OBJECT_NAME(fkcol.constraint_object_id) as "Foreign Key Name"
 ,	fkcol.parent_object_id as "Child Table Id", ''[''+SCHEMA_NAME(tbl_child.schema_id)+'']''+''.''+''[''+OBJECT_NAME(fkcol.parent_object_id)+'']'' as "Child Table Name"
@@ -654,22 +702,22 @@ left join sys.tables tbl_parent on (tbl_parent.object_id = fkcol.referenced_obje
 '
 
 SET @sql = @comm_create_view_scripts
-SET @sql = REPLACE(@sql, '{schema}', @schema)
-SET @sql = REPLACE(@sql, '{view}', @view)
+SET @sql = REPLACE(@sql, N'{schema}', @schema)
+SET @sql = REPLACE(@sql, N'{view}', @view)
 if OBJECT_ID(@schema +'.'+@view) is null
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT 'View [' + @schema + '].[' + @view + '] has been created in the [' + DB_NAME() + '] database.'
+		PRINT N'View [' + @schema + N'].[' + @view + N'] has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
-		PRINT 'ERROR: ' + 'Cannot create the View [' + @schema + '].[' + @view + '] in the [' + DB_NAME() + '] database!!'
-		PRINT 'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + ': ' + ERROR_MESSAGE()
+		PRINT N'ERROR: ' + N'Cannot create the View [' + @schema + N'].[' + @view + N'] in the [' + DB_NAME() + N'] database!!'
+		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
 	END CATCH
 END
 ELSE
 BEGIN
-	PRINT 'WARNING: '+ 'View [' + @schema + '].[' + @view + '] has not been created because was already present in [' + DB_NAME() + '] database.'
+	PRINT N'WARNING: ' + N'View [' + @schema + N'].[' + @view + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [vForeignKeyCols] VIEW CREATION		*********************************************************************************************************
 

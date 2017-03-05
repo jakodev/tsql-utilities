@@ -1,4 +1,4 @@
-use <my_database>
+use IntroToEF6
 go
 
-execute JakodevUtils.uspDropMe @schema='JakodevUtils'
+execute JakodevUtilities.uspDropMe
