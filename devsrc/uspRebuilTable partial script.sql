@@ -68,16 +68,26 @@ BEGIN
 		SELECT	OBJECT_SCHEMA_NAME(fk.object_id) as "obj_schema"
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
-		,		''ALTER TABLE '' + OBJECT_SCHEMA_NAME(fk.object_id)+''.''+ OBJECT_NAME(fk.parent_object_id) 
-		+		'' ADD CONSTRAINT '' + OBJECT_NAME(object_id)
-		+		'' FOREIGN KEY('' +   [{schema}].[ufnConcatFkColumnNames](fk.object_id, fk.parent_object_id, ''C'') + '')''
-		+		'' REFERENCES '' + OBJECT_SCHEMA_NAME(fk.referenced_object_id) + ''.'' + OBJECT_NAME(fk.referenced_object_id) + '' ('' + [{schema}].[ufnConcatFkColumnNames](fk.object_id, fk.referenced_object_id, ''P'') + '')'' 
+		,		''ALTER TABLE '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.object_id))+''.''+ QUOTENAME(OBJECT_NAME(fk.parent_object_id))
+		+		'' ADD CONSTRAINT '' + QUOTENAME(OBJECT_NAME(object_id))
+		+		'' FOREIGN KEY'' 
+		-- concatenation of the child''s (constraint) columns name (STUFF is used to remove the first comma)
+		+		''('' +   STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
+											JOIN sys.all_columns col on (col.column_id = fkcol.parent_column_id and col.object_id = fkcol.parent_object_id) -- child (constraint) fk columns
+											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
+											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
+		+		'' REFERENCES '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.referenced_object_id))
+		-- concatenation of the parent''s (referenced) columns name (STUFF is used to remove the first comma)
+		+		''('' + STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
+											JOIN sys.all_columns col on (col.column_id = fkcol.referenced_column_id and col.object_id = fkcol.referenced_object_id) -- parent (referenced) fk columns
+											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
+											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
 		+		CASE WHEN fk.update_referential_action_desc != ''NO_ACTION'' THEN '' ON UPDATE '' + REPLACE(fk.update_referential_action_desc, ''_'', '' '') ELSE '''' END
 		+		CASE WHEN fk.delete_referential_action_desc != ''NO_ACTION'' THEN '' ON DELETE '' + REPLACE(fk.delete_referential_action_desc, ''_'', '' '') ELSE '''' END COLLATE database_default as "sql_string"
 		,		''ADD_FOREIGN_KEY_CONSTRAINT'' as "sql_type"
 		FROM sys.foreign_keys fk
 		WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
-
+		
 		UNION ALL
 
 		-- query for drop foreign keys

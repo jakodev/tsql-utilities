@@ -4,7 +4,7 @@
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last Update: MAR-2017
--- Version:		0.91.00
+-- Version:		0.92.00
 -- Description:	
 I've begun this tiny program to easily handle the DROP/CREATE TABLE procedure when one o more Foreign Keys are referencing to it. So, to accomplish this
 task I need to add some items like tables, functions, stored procedures etc.. in the target database. And that is what this setup script do
@@ -12,7 +12,6 @@ task I need to add some items like tables, functions, stored procedures etc.. in
 Add a new schema named as the variable @schema (customizable) to the <current database> (DB_NAME()).
 Into this new schema add the following items:
 - A new table named [SqlScript], used to save the sql scripts to be executed;
-- A new function named [ufnConcatFkColumnNames], used to concatenate column names belonging to the foreign keys;
 - A new stored procedure named [uspExecScriptsByKeys], used to run the scripts saved in @tbl_scripts;
 - A new stored procedure named [uspDropMe], used to delete all the items beloging to this schema, and the schema itself, in order to clean your database;
 - A new stored procedure named [uspReset], used to truncate the table SqlScript;
@@ -27,7 +26,6 @@ DECLARE @schema nvarchar(128) = N'JakodevUtilities'
 
 -- ##################################################################################################################################################
 DECLARE @sql nvarchar(max)
-DECLARE @function nvarchar(128)
 DECLARE @procedure nvarchar(128)
 DECLARE @view nvarchar(128)
 DECLARE @tableSqlScripts nvarchar(50) = N'SqlScript'
@@ -110,95 +108,6 @@ BEGIN
 	PRINT N'WARNING: ' + N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [@tbl_scripts] TABLE CREATION		*************************************************************************************************************
-
--- > [ufnConcatFkColumnNames] FUNCTION CREATION		*************************************************************************************************
-SET @function = N'ufnConcatFkColumnNames'
-SET @comm_create_function =
-N'
--- =============================================
--- Author:		Jakodev
--- Create date: JAN-2017
--- Last update:	MAR-2017
--- Version:		0.90.00
--- Description:	Returns a concatenated list of Foreign Key''s column names.
--- Params:		@tableIdRef, the table referenced by the foreign key identified by its object_id
---				@tableId, object_id of parent table or child table, the value passed here must be in according with arg @tableIdType
---				@tableIdType, allow two only values	> ''C'' returns the constraint columns (fk child columns)	>> @tableId must be the parent_object_id
---													> ''P'' returns the referenced columns (fk parent columns)	>> @tableId must be the referenced_object_id
-
--- Note: 
--- in SQLSERVER the child table is identified by the field parent_object_id
--- in SQLSERVER the parent table is identified by the field referenced_object_id
--- =============================================
-
-CREATE FUNCTION {schema}.{function}
-(
-	@tableIdRef int,	
-	@tableId int,				
-	@tableIdType char(1)				
-)
-RETURNS nvarchar(500)
-
-AS
-
-BEGIN
-	
-	DECLARE @ResultVar nvarchar(1000) = ''''
-	DECLARE @Name nvarchar(50)
-	DECLARE @index int = 1
-	DECLARE @parentCol int		-- the constrained column (child table)
-	DECLARE @referencedCol int	-- the referenced column (parent table)
-
-	DECLARE c_cols CURSOR FOR SELECT parent_column_id, referenced_column_id FROM sys.foreign_key_columns WHERE constraint_object_id = @tableIdRef
-	
-	OPEN c_cols
-	FETCH NEXT FROM c_cols INTO @parentCol, @referencedCol
-	WHILE (@@FETCH_STATUS = 0)
-
-	BEGIN
-		IF @index > 1
-			SET @ResultVar = CONCAT(@ResultVar, '', '');
-
-		IF @tableIdType = ''C''
-			SELECT @Name = name FROM sys.all_columns WHERE object_id = @tableId and column_id = @parentCol
-		ELSE
-			IF @tableIdType = ''P''
-				SELECT @Name = name FROM sys.all_columns WHERE object_id = @tableId and column_id = @referencedCol
-			ELSE
-				SET @Name = ''Undefined''
-
-		SET @ResultVar = CONCAT(@ResultVar, @Name)
-		SET @index = @index + 1
-
-		FETCH NEXT FROM c_cols INTO @parentCol, @referencedCol
-	END
-
-	CLOSE c_cols
-	DEALLOCATE c_cols
-
-	RETURN @ResultVar
-
-END
-'
-SET @sql = @comm_create_function
-SET @sql = REPLACE(@sql, N'{schema}', @schema)
-SET @sql = REPLACE(@sql, N'{function}', @function)
-if OBJECT_ID(@schema + N'.' + @function) is null
-BEGIN
-	BEGIN TRY
-		EXEC sp_sqlexec @sql
-		PRINT N'Function [' + @schema + N'].[' + @function + N'] has been created in the [' + DB_NAME() + N'] database.'
-	END TRY
-	BEGIN CATCH
-		PRINT N'ERROR: ' + N'Cannot create the Function [' + @schema + N'].[' + @function + N'] in the [' + DB_NAME() + N'] database!!'
-		PRINT N'SQLERROR-' + CONVERT( varchar(10), ERROR_NUMBER()) + N': ' + ERROR_MESSAGE()
-	END CATCH
-END
-ELSE
-BEGIN
-	PRINT N'WARNING: ' + N'Function [' + @schema + N'].[' + @function + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
-END
--- < [ufnConcatFkColumnNames] FUNCTION CREATION		*************************************************************************************************
 
 -- > [uspExecScriptsByKeys] PROCEDURE CREATION		*************************************************************************************************
 SET @procedure = N'uspExecScriptsByKeys'
@@ -531,16 +440,26 @@ BEGIN
 		SELECT	OBJECT_SCHEMA_NAME(fk.object_id) as "obj_schema"
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
-		,		''ALTER TABLE '' + OBJECT_SCHEMA_NAME(fk.object_id)+''.''+ OBJECT_NAME(fk.parent_object_id) 
-		+		'' ADD CONSTRAINT '' + OBJECT_NAME(object_id)
-		+		'' FOREIGN KEY('' +   [{schema}].[ufnConcatFkColumnNames](fk.object_id, fk.parent_object_id, ''C'') + '')''
-		+		'' REFERENCES '' + OBJECT_SCHEMA_NAME(fk.referenced_object_id) + ''.'' + OBJECT_NAME(fk.referenced_object_id) + '' ('' + [{schema}].[ufnConcatFkColumnNames](fk.object_id, fk.referenced_object_id, ''P'') + '')'' 
+		,		''ALTER TABLE '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.object_id))+''.''+ QUOTENAME(OBJECT_NAME(fk.parent_object_id))
+		+		'' ADD CONSTRAINT '' + QUOTENAME(OBJECT_NAME(object_id))
+		+		'' FOREIGN KEY'' 
+		-- concatenation of the child''s (constraint) columns name (STUFF is used to remove the first comma)
+		+		''('' +   STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
+											JOIN sys.all_columns col on (col.column_id = fkcol.parent_column_id and col.object_id = fkcol.parent_object_id) -- child (constraint) fk columns
+											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
+											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
+		+		'' REFERENCES '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.referenced_object_id))
+		-- concatenation of the parent''s (referenced) columns name (STUFF is used to remove the first comma)
+		+		''('' + STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
+											JOIN sys.all_columns col on (col.column_id = fkcol.referenced_column_id and col.object_id = fkcol.referenced_object_id) -- parent (referenced) fk columns
+											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
+											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
 		+		CASE WHEN fk.update_referential_action_desc != ''NO_ACTION'' THEN '' ON UPDATE '' + REPLACE(fk.update_referential_action_desc, ''_'', '' '') ELSE '''' END
 		+		CASE WHEN fk.delete_referential_action_desc != ''NO_ACTION'' THEN '' ON DELETE '' + REPLACE(fk.delete_referential_action_desc, ''_'', '' '') ELSE '''' END COLLATE database_default as "sql_string"
 		,		''ADD_FOREIGN_KEY_CONSTRAINT'' as "sql_type"
 		FROM sys.foreign_keys fk
 		WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
-
+		
 		UNION ALL
 
 		-- query for drop foreign keys
