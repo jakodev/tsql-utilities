@@ -81,26 +81,27 @@ CREATE TABLE {schema}.{table}
 	,	sql_type nvarchar(50) not null
 	,	sql_hash nvarchar(100) not null
 	,	sql_status int DEFAULT 0
-	,	sql_status_message nvarchar(500) DEFAULT ''Not executed yet''
+	,	sql_status_message nvarchar(500) DEFAULT {q}Not executed yet{q}
 	,	Timestamp timestamp
 	)
 	
 ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_{table} PRIMARY KEY (sql_hash)
 
 -- add description about column sql_status
-EXEC sys.sp_addextendedproperty @name=N''MS_Description'', @value=N''0=Never Run; 1=Run Successful; -x=Error code'' , @level0type=N''SCHEMA'',@level0name=N''{schema}'', @level1type=N''TABLE'',@level1name=N''{table}'', @level2type=N''COLUMN'',@level2name=N''sql_status''
+EXEC sys.sp_addextendedproperty @name=N{q}MS_Description{q}, @value=N{q}0=Never Run; 1=Run Successful; -x=Error code{q} , @level0type=N{q}SCHEMA{q},@level0name=N{q}{schema}{q}, @level1type=N{q}TABLE{q},@level1name=N{q}{table}{q}, @level2type=N{q}COLUMN{q},@level2name=N{q}sql_status{q}
 '
 
 SET @sql = @comm_create_table_scripts
 
 if OBJECT_ID(@schema +'.'+@tableSqlScripts) is not null AND @replaceItem = 'true'
 BEGIN
-	SET @sql = 'DROP TABLE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@tableSqlScripts) + '; PRINT N''Table [{schema}].[{table}] has been dropped from the [{database}] database.''; ' + @sql
+	SET @sql = 'DROP TABLE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@tableSqlScripts) + '; PRINT N''Table [{schema}].[{table}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
 END
 
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
 SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''')
 
 if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null OR @replaceItem = 'true'
 BEGIN
@@ -129,7 +130,7 @@ N'
 -- Last update:	FEB-2017
 -- Version:		0.91.00
 -- Description:	Execute the scripts stored into the {table} table based on the filters passed as arguments. 
---				Each argument different from NULL or '''' is used as AND operator in the where clause. 
+--				Each argument different from NULL or {q}{q} is used as AND operator in the where clause. 
 --				Only scripts in status 0 will be executed, otherwise a warning will be printed.
 -- =============================================
 
@@ -145,16 +146,16 @@ AS
 
 DECLARE sql_script_cursor CURSOR FOR	SELECT sql_string, sql_hash, sql_status
 										FROM {schema}.{table}
-										WHERE	(ISNULL(@obj_schema,''0''	) in (''0'','''') or (	obj_schema	= @obj_schema	))
-										AND		(ISNULL(@obj_name,	''0''	) in (''0'','''') or (	obj_name	= @obj_name		))
-										AND		(ISNULL(@sql_key,	''0''	) in (''0'','''') or (	sql_key		= @sql_key		))
-										AND		(ISNULL(@sql_type,	''0''	) in (''0'','''') or (	sql_type	= @sql_type		))
-										AND		(ISNULL(@sql_hash,	''0''	) in (''0'','''') or (	sql_hash	= @sql_hash		))
-										AND		(COALESCE(NULLIF(@obj_schema,	'''')
-														, NULLIF(@obj_name,		'''')
-														, NULLIF(@sql_key,		'''')
-														, NULLIF(@sql_type,		'''')
-														, NULLIF(@sql_hash,		'''')
+										WHERE	(ISNULL(@obj_schema,{q}0{q}	) in ({q}0{q},{q}{q}) or (	obj_schema	= @obj_schema	))
+										AND		(ISNULL(@obj_name,	{q}0{q}	) in ({q}0{q},{q}{q}) or (	obj_name	= @obj_name		))
+										AND		(ISNULL(@sql_key,	{q}0{q}	) in ({q}0{q},{q}{q}) or (	sql_key		= @sql_key		))
+										AND		(ISNULL(@sql_type,	{q}0{q}	) in ({q}0{q},{q}{q}) or (	sql_type	= @sql_type		))
+										AND		(ISNULL(@sql_hash,	{q}0{q}	) in ({q}0{q},{q}{q}) or (	sql_hash	= @sql_hash		))
+										AND		(COALESCE(NULLIF(@obj_schema,	{q}{q})
+														, NULLIF(@obj_name,		{q}{q})
+														, NULLIF(@sql_key,		{q}{q})
+														, NULLIF(@sql_type,		{q}{q})
+														, NULLIF(@sql_hash,		{q}{q})
 												) is not null)
 
 DECLARE @sql varchar(max)
@@ -172,13 +173,13 @@ BEGIN
 			
 			IF @status = 1
 				BEGIN
-					PRINT ''WARNING: This script was skipped due to a previous execution: '' + ''"'' + @sql + ''"'' + '' ('' + @hash + '')''
+					PRINT {q}WARNING: This script was skipped due to a previous execution: {q} + {q}"{q} + @sql + {q}"{q} + {q} ({q} + @hash + {q}){q}
 				END
 			ELSE
 				BEGIN
 					EXEC sp_sqlexec @sql
-					PRINT ''Successful execution of '' + ''"'' + @sql + ''"''
-					UPDATE {schema}.{table} SET sql_status = 1, sql_status_message = ''Success'' WHERE sql_hash = @hash
+					PRINT {q}Successful execution of {q} + {q}"{q} + @sql + {q}"{q}
+					UPDATE {schema}.{table} SET sql_status = 1, sql_status_message = {q}Success{q} WHERE sql_hash = @hash
 				END
 
 		END TRY
@@ -205,10 +206,19 @@ BEGIN
 END'
 
 SET @sql = @comm_create_procedure
+
+if OBJECT_ID(@schema + N'.' + @procedure) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP PROCEDURE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@procedure) + '; PRINT N''Stored Procedure [{schema}].[{procedure}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
-if OBJECT_ID(@schema + N'.' + @procedure) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
+
+if OBJECT_ID(@schema + N'.' + @procedure) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
@@ -239,7 +249,7 @@ N'
 
 CREATE PROCEDURE {schema}.{procedure}
 (
-	@schema varchar(128) = ''{schema}''
+	@schema varchar(128) = {q}{schema}{q}
 )
 
 AS
@@ -250,7 +260,7 @@ BEGIN
 	DECLARE @object_type varchar(2)
 	DECLARE @sql varchar(max)
 
-	DECLARE drop_cursor CURSOR FOR select name, type from sys.objects where SCHEMA_NAME(schema_id) = @schema and type in (''FN'', ''P'', ''U'', ''V'')
+	DECLARE drop_cursor CURSOR FOR select name, type from sys.objects where SCHEMA_NAME(schema_id) = @schema and type in ({q}FN{q}, {q}P{q}, {q}U{q}, {q}V{q})
 
 	OPEN drop_cursor
 	FETCH NEXT FROM drop_cursor INTO @object_name, @object_type
@@ -258,7 +268,7 @@ BEGIN
 	-- check for schema existence
 	IF (@@FETCH_STATUS = -1)
 	BEGIN
-		PRINT ''Cannot find any Schema named ['' + @schema + ''] in the ['' + DB_NAME() + ''] database!!''
+		PRINT {q}Cannot find any Schema named [{q} + @schema + {q}] in the [{q} + DB_NAME() + {q}] database!!{q}
 		CLOSE drop_cursor
 		DEALLOCATE drop_cursor
 		RETURN 0
@@ -269,19 +279,19 @@ BEGIN
 
 		SET @sql =
 			CASE @object_type
-				WHEN ''FN'' THEN ''DROP FUNCTION {schema}.{object}''
-				WHEN ''P'' THEN ''DROP PROCEDURE {schema}.{object}''
-				WHEN ''U'' THEN ''DROP TABLE {schema}.{object}''
-				WHEN ''V'' THEN ''DROP VIEW {schema}.{object}''
+				WHEN {q}FN{q} THEN {q}DROP FUNCTION {schema}.{object}{q}
+				WHEN {q}P{q} THEN {q}DROP PROCEDURE {schema}.{object}{q}
+				WHEN {q}U{q} THEN {q}DROP TABLE {schema}.{object}{q}
+				WHEN {q}V{q} THEN {q}DROP VIEW {schema}.{object}{q}
 				ELSE null
 			END
 
 		IF @sql is not null
 			BEGIN
-				SET @sql = REPLACE(@sql, ''{schema}'', @schema)
-				SET @sql = REPLACE(@sql, ''{object}'', @object_name)
+				SET @sql = REPLACE(@sql, {q}{schema}{q}, @schema)
+				SET @sql = REPLACE(@sql, {q}{object}{q}, @object_name)
 				EXEC sp_sqlexec @sql
-				PRINT ''OBJECT '' + @schema +''.''+@object_name + '' dropped!''
+				PRINT {q}OBJECT {q} + @schema +{q}.{q}+@object_name + {q} dropped!{q}
 			END	
 
 		FETCH NEXT FROM drop_cursor INTO @object_name, @object_type
@@ -293,19 +303,28 @@ BEGIN
 
 	IF SCHEMA_ID(@schema) is not null
 		BEGIN
-			SET @sql = ''DROP SCHEMA {schema}''
-			SET @sql = REPLACE(@sql, ''{schema}'', @schema)
+			SET @sql = {q}DROP SCHEMA {schema}{q}
+			SET @sql = REPLACE(@sql, {q}{schema}{q}, @schema)
 			EXEC sp_sqlexec @sql
-			PRINT ''SCHEMA '' + @schema + '' dropped!''
+			PRINT {q}SCHEMA {q} + @schema + {q} dropped!{q}
 		END
 		
 END
 '
 
 SET @sql = @comm_create_procedure
+
+if OBJECT_ID(@schema + N'.' + @procedure) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP PROCEDURE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@procedure) + '; PRINT N''Stored Procedure [{schema}].[{procedure}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
-if OBJECT_ID(@schema + N'.' + @procedure) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
+
+if OBJECT_ID(@schema + N'.' + @procedure) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
@@ -332,38 +351,47 @@ N'
 -- Last update:	MAR-2017
 -- Version:		0.91.00
 -- Description:	Reset or truncate the table {table}
--- Params:		@method, allows two olny values > ''R'' > Reset (set status 0) all the scripts;
---												> ''T'' > Truncate the table.	
+-- Params:		@method, allows two olny values > {q}R{q} > Reset (set status 0) all the scripts;
+--												> {q}T{q} > Truncate the table.	
 -- =============================================
 
 CREATE PROCEDURE {schema}.{procedure} 
 
-	@method varchar(1) = ''R''
+	@method varchar(1) = {q}R{q}
 	
 AS
 
 BEGIN
 
-	if @method = ''T''
+	if @method = {q}T{q}
 	BEGIN
 		truncate table {schema}.{table}
-		PRINT ''Table {schema}.{table} trucated successful.''
+		PRINT {q}Table {schema}.{table} trucated successful.{q}
 	END 
 
-	if @method = ''R''
+	if @method = {q}R{q}
 	BEGIN
-		update {schema}.{table} set sql_status = 0, sql_status_message = ''Reset''
-		PRINT CONVERT(varchar(100), @@ROWCOUNT) + '' rows of table {schema}.{table} reset successful.''
+		update {schema}.{table} set sql_status = 0, sql_status_message = {q}Reset{q}
+		PRINT CONVERT(varchar(100), @@ROWCOUNT) + {q} rows of table {schema}.{table} reset successful.{q}
 	END
 
 END
 '
 
 SET @sql = @comm_create_procedure
+
+if OBJECT_ID(@schema + N'.' + @procedure) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP PROCEDURE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@procedure) + '; PRINT N''Stored Procedure [{schema}].[{procedure}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
-if OBJECT_ID(@schema + N'.' + @procedure) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
+
+if OBJECT_ID(@schema + N'.' + @procedure) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
@@ -376,7 +404,7 @@ BEGIN
 END
 ELSE
 BEGIN
-	PRINT N'WARNING: ' + N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
+	PRINT N'WARNING: '+ N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [uspReset] PROCEDURE CREATION		*************************************************************************************************************
 
@@ -402,8 +430,8 @@ N'
 --			@schema: the schema of the table;
 --			@table: the table to rebuild;
 --			@DDL: Columns DDL (you must provide only the DDL to add the columns)
---			@debugMode: allow only two values	> ''true'', no drop performed. To use for checking if all the necessary scripts will be generated;
---												> ''false'', performs all the tasks that the procedure is intended to do.
+--			@debugMode: allow only two values	> {q}true{q}, no drop performed. To use for checking if all the necessary scripts will be generated;
+--												> {q}false{q}, performs all the tasks that the procedure is intended to do.
 -- =============================================
 
 CREATE PROCEDURE {schema}.{procedure}
@@ -412,31 +440,31 @@ CREATE PROCEDURE {schema}.{procedure}
 	@schema varchar(128),
 	@table varchar(128),
 	@DDL varchar(max),
-	@debugMode bit = ''true''
+	@debugMode bit = {q}true{q}
 
 AS
 BEGIN
-	IF @debugMode = ''true''
-		PRINT ''Debug mode enabled, no changes will be saved''
+	IF @debugMode = {q}true{q}
+		PRINT {q}Debug mode enabled, no changes will be saved{q}
 
-	IF COALESCE(@schema,'''') = ''''
+	IF COALESCE(@schema,{q}{q}) = {q}{q}
 	BEGIN
-		PRINT ''Schema cannot be empty or null''
+		PRINT {q}Schema cannot be empty or null{q}
 		RETURN -1
 	END
 
-	IF COALESCE(@table, '''') = ''''
+	IF COALESCE(@table, {q}{q}) = {q}{q}
 	BEGIN
-		PRINT ''Table cannot be empty or null''
+		PRINT {q}Table cannot be empty or null{q}
 		RETURN -1
 	END
 	
 	DECLARE @sql varchar(max)
-	DECLARE @tableToRebuild varchar(384) = COALESCE(@database, DB_NAME()) + ''.'' + @schema + ''.'' + @table	
-	DECLARE @comm_create_table varchar(max) = N''CREATE TABLE {usp_table} ('' + @DDL + '')''
+	DECLARE @tableToRebuild varchar(384) = COALESCE(@database, DB_NAME()) + {q}.{q} + @schema + {q}.{q} + @table	
+	DECLARE @comm_create_table varchar(max) = N{q}CREATE TABLE {usp_table} ({q} + @DDL + {q}){q}
 	DECLARE @returnValue int = 0
 	
-	-- > (1) ANALISYS AND SAVING FK''s DDL **********************************************************************************************************
+	-- > (1) ANALISYS AND SAVING FK{q}s DDL **********************************************************************************************************
 	BEGIN TRY
 	INSERT INTO [{schema}].[{table}] (obj_schema, obj_name, sql_key, sql_string, sql_type, sql_hash)
 	select	mainquery.obj_schema
@@ -444,29 +472,29 @@ BEGIN
 	,		mainquery.sql_key
 	,		mainquery.sql_string
 	,		mainquery.sql_type
-	,		CONVERT( varchar(50), HASHBYTES(''SHA1'',mainquery.sql_string), 2) as "sql_hash"
+	,		CONVERT( varchar(50), HASHBYTES({q}SHA1{q},mainquery.sql_string), 2) as "sql_hash"
 	from ( 
 		-- query for create foreign keys
 		SELECT	OBJECT_SCHEMA_NAME(fk.object_id) as "obj_schema"
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
-		,		''ALTER TABLE '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.object_id))+''.''+ QUOTENAME(OBJECT_NAME(fk.parent_object_id))
-		+		'' ADD CONSTRAINT '' + QUOTENAME(OBJECT_NAME(object_id))
-		+		'' FOREIGN KEY'' 
-		-- concatenation of the child''s (constraint) columns name (STUFF is used to remove the first comma)
-		+		''('' +   STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
+		,		{q}ALTER TABLE {q} + QUOTENAME(OBJECT_SCHEMA_NAME(fk.object_id))+{q}.{q}+ QUOTENAME(OBJECT_NAME(fk.parent_object_id))
+		+		{q} ADD CONSTRAINT {q} + QUOTENAME(OBJECT_NAME(object_id))
+		+		{q} FOREIGN KEY{q} 
+		-- concatenation of the child{q}s (constraint) columns name (STUFF is used to remove the first comma)
+		+		{q}({q} +   STUFF ((SELECT {q},{q} + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
 											JOIN sys.all_columns col on (col.column_id = fkcol.parent_column_id and col.object_id = fkcol.parent_object_id) -- child (constraint) fk columns
 											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
-											FOR XML PATH (N''''), TYPE).value(''.'', ''varchar(max)''), 1, 1, N'''') + '')''
-		+		'' REFERENCES '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.referenced_object_id))
-		-- concatenation of the parent''s (referenced) columns name (STUFF is used to remove the first comma)
-		+		''('' + STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
+											FOR XML PATH (N{q}{q}), TYPE).value({q}.{q}, {q}varchar(max){q}), 1, 1, N{q}{q}) + {q}){q}
+		+		{q} REFERENCES {q} + QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + {q}.{q} + QUOTENAME(OBJECT_NAME(fk.referenced_object_id))
+		-- concatenation of the parent{q}s (referenced) columns name (STUFF is used to remove the first comma)
+		+		{q}({q} + STUFF ((SELECT {q},{q} + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
 											JOIN sys.all_columns col on (col.column_id = fkcol.referenced_column_id and col.object_id = fkcol.referenced_object_id) -- parent (referenced) fk columns
 											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
-											FOR XML PATH (N''''), TYPE).value(''.'', ''varchar(max)''), 1, 1, N'''') + '')''
-		+		CASE WHEN fk.update_referential_action_desc != ''NO_ACTION'' THEN '' ON UPDATE '' + REPLACE(fk.update_referential_action_desc, ''_'', '' '') ELSE '''' END
-		+		CASE WHEN fk.delete_referential_action_desc != ''NO_ACTION'' THEN '' ON DELETE '' + REPLACE(fk.delete_referential_action_desc, ''_'', '' '') ELSE '''' END COLLATE database_default as "sql_string"
-		,		''ADD_FOREIGN_KEY_CONSTRAINT'' as "sql_type"
+											FOR XML PATH (N{q}{q}), TYPE).value({q}.{q}, {q}varchar(max){q}), 1, 1, N{q}{q}) + {q}){q}
+		+		CASE WHEN fk.update_referential_action_desc != {q}NO_ACTION{q} THEN {q} ON UPDATE {q} + REPLACE(fk.update_referential_action_desc, {q}_{q}, {q} {q}) ELSE {q}{q} END
+		+		CASE WHEN fk.delete_referential_action_desc != {q}NO_ACTION{q} THEN {q} ON DELETE {q} + REPLACE(fk.delete_referential_action_desc, {q}_{q}, {q} {q}) ELSE {q}{q} END COLLATE database_default as "sql_string"
+		,		{q}ADD_FOREIGN_KEY_CONSTRAINT{q} as "sql_type"
 		FROM sys.foreign_keys fk
 		WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
 		
@@ -476,101 +504,101 @@ BEGIN
 		SELECT	OBJECT_SCHEMA_NAME(fk.object_id) as "obj_schema"
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
-		,		''ALTER TABLE '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.parent_object_id)) + '' DROP CONSTRAINT ''+ QUOTENAME(fk.name) COLLATE database_default as "sql_string"
-		,		''DROP_FOREIGN_KEY_CONSTRAINT'' as sql_type 
+		,		{q}ALTER TABLE {q} + QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id)) + {q}.{q} + QUOTENAME(OBJECT_NAME(fk.parent_object_id)) + {q} DROP CONSTRAINT {q}+ QUOTENAME(fk.name) COLLATE database_default as "sql_string"
+		,		{q}DROP_FOREIGN_KEY_CONSTRAINT{q} as sql_type 
 		FROM sys.foreign_keys fk
 		WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
 	) mainquery
 	END TRY
 	BEGIN CATCH
-		SET @returnValue = -ERROR_NUMBER()
 		DECLARE @err_num INT = ERROR_NUMBER()
 		DECLARE @err_msg NVARCHAR(4000) = ERROR_MESSAGE()
-		PRINT ''Something gone wrong! the insert statement raised the following error:''
-		PRINT ''Error Number:'' + CONVERT( varchar(10), @err_num) + '' - ''+ @err_msg 
+		SET @returnValue = @err_num
+		PRINT {q}Something gone wrong! the insert statement raised the following error:{q}
+		PRINT {q}Error Number:{q} + CONVERT( varchar(10), @err_num) + {q} - {q}+ @err_msg 
 		IF @err_num = 2627 -- known issue, not a real problem
 		BEGIN
-			PRINT ''Maybe you''''ve run this procedure in debug mode more than once without reset the environment between the first and the last execution''
-			PRINT ''''
-			@returnValue = 0
+			PRINT {q}Maybe you{q}{q}ve run this procedure in debug mode more than once without reset the environment between the first and the last execution{q}
+			PRINT {q}{q}
+			SET @returnValue = 0
 		END
 		ELSE
 			RETURN @returnValue
 	END CATCH
-	-- < (1) ANALISYS AND SAVING FK''s DDL **********************************************************************************************************
+	-- < (1) ANALISYS AND SAVING FK{q}s DDL **********************************************************************************************************
 
 	-- > (2) DROP THE FOREIGN KEYS	*****************************************************************************************************************
-	SET @sql = ''EXEC {schema}.uspExecScriptsByKeys @sql_key=''''{usp_table}'''', @sql_type=''''DROP_FOREIGN_KEY_CONSTRAINT''''''
-	SET @sql = REPLACE(@sql, ''{usp_table}'', OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
-	IF @debugMode = ''false''
+	SET @sql = {q}EXEC {schema}.uspExecScriptsByKeys @sql_key={q}{q}{usp_table}{q}{q}, @sql_type={q}{q}DROP_FOREIGN_KEY_CONSTRAINT{q}{q}{q}
+	SET @sql = REPLACE(@sql, {q}{usp_table}{q}, OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
+	IF @debugMode = {q}false{q}
 	BEGIN
 		-- try/catch handled by called procedure
 		EXEC sp_sqlexec @sql
 	END
 	ELSE
-		PRINT ''DROP FOREIGN KEYS (Debug mode enabled)''
+		PRINT {q}DROP FOREIGN KEYS (Debug mode enabled){q}
 
 	-- < (2) DROP THE FOREIGN KEYS	*****************************************************************************************************************
 
 	-- > (3) DROP TABLE		*************************************************************************************************************************
-	DECLARE @comm_drop_table varchar(max) = ''DROP TABLE {usp_table}''
+	DECLARE @comm_drop_table varchar(max) = {q}DROP TABLE {usp_table}{q}
 	SET @sql = @comm_drop_table
-	SET @sql = REPLACE(@sql, ''{usp_table}'', @tableToRebuild)
+	SET @sql = REPLACE(@sql, {q}{usp_table}{q}, @tableToRebuild)
 	IF OBJECT_ID(@tableToRebuild) is not null
 	BEGIN
-		IF @debugMode = ''false''
+		IF @debugMode = {q}false{q}
 		BEGIN
 			BEGIN TRY
 				EXEC sp_sqlexec @sql
-				PRINT ''Table '' + @tableToRebuild + '' has been dropped successful!''
+				PRINT {q}Table {q} + @tableToRebuild + {q} has been dropped successful!{q}
 			END TRY
 			BEGIN CATCH
-				SET @returnValue = -ERROR_NUMBER()
-				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
+				SET @returnValue = ERROR_NUMBER()
+				PRINT {q}SQLERROR-{q} + CONVERT( varchar(10), ERROR_NUMBER()) + {q}: {q} + ERROR_MESSAGE()
 				RETURN @returnValue
 			END CATCH
 		END	
 		ELSE
-			PRINT ''DROP TABLE (Debug mode enabled)''
+			PRINT {q}DROP TABLE (Debug mode enabled){q}
 	END
 	-- < (3) DROP TABLE		*************************************************************************************************************************
 	
 	-- > (4) CREATE TABLE	*************************************************************************************************************************
 	SET @sql = @comm_create_table
-	SET @sql = REPLACE(@sql, ''{usp_table}'', @tableToRebuild)
+	SET @sql = REPLACE(@sql, {q}{usp_table}{q}, @tableToRebuild)
 	IF OBJECT_ID(@tableToRebuild) is null
 	BEGIN
-		IF @debugMode = ''false''
+		IF @debugMode = {q}false{q}
 		BEGIN
 			BEGIN TRY
 				EXEC sp_sqlexec @sql
-				PRINT ''Table '' + @tableToRebuild + '' has been created successful!''
+				PRINT {q}Table {q} + @tableToRebuild + {q} has been created successful!{q}
 			END TRY
 			BEGIN CATCH
-				SET @returnValue = -ERROR_NUMBER()
-				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
+				SET @returnValue = ERROR_NUMBER()
+				PRINT {q}SQLERROR-{q} + CONVERT( varchar(10), ERROR_NUMBER()) + {q}: {q} + ERROR_MESSAGE()
 				RETURN @returnValue
 			END CATCH
 		END
 		ELSE
-			PRINT ''CREATE TABLE (Debug mode enabled)''
+			PRINT {q}CREATE TABLE (Debug mode enabled){q}
 	END
 	ELSE
-		PRINT ''CREATE TABLE ignored, table already exists!''
+		PRINT {q}CREATE TABLE ignored, table already exists!{q}
 	-- < (4) CREATE TABLE	*************************************************************************************************************************
 	
 	-- > (5) FOREIGN KEYS RESTORING		*************************************************************************************************************
-	SET @sql = ''EXEC {schema}.uspExecScriptsByKeys @sql_key=''''{usp_table}'''', @sql_type=''''ADD_FOREIGN_KEY_CONSTRAINT''''''
-	SET @sql = REPLACE(@sql, ''{usp_table}'', OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
-	IF @debugMode = ''false''
+	SET @sql = {q}EXEC {schema}.uspExecScriptsByKeys @sql_key={q}{q}{usp_table}{q}{q}, @sql_type={q}{q}ADD_FOREIGN_KEY_CONSTRAINT{q}{q}{q}
+	SET @sql = REPLACE(@sql, {q}{usp_table}{q}, OBJECT_NAME(OBJECT_ID(@tableToRebuild)))
+	IF @debugMode = {q}false{q}
 	BEGIN
 		-- try/catch handled by called procedure
 		EXEC sp_sqlexec @sql
 	END
 	ELSE
 	BEGIN
-		PRINT ''RESTORE FOREIGN KEYS (Debug mode enabled)''
-		SET @sql = ''SELECT * FROM [{schema}].[{table}]''
+		PRINT {q}RESTORE FOREIGN KEYS (Debug mode enabled){q}
+		SET @sql = {q}SELECT * FROM [{schema}].[{table}]{q}
 		EXEC sp_sqlexec @sql
 	END
 	-- < (5) FOREIGN KEYS RESTORING		*************************************************************************************************************
@@ -578,12 +606,12 @@ BEGIN
 	DECLARE @errors int
 	SELECT @errors = COUNT(*)
 	FROM [{schema}].[{table}] 
-	WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@tableToRebuild)) AND sql_type IN (''ADD_FOREIGN_KEY_CONSTRAINT'',''DROP_FOREIGN_KEY_CONSTRAINT'')
+	WHERE sql_status < 0 AND sql_key=OBJECT_NAME(OBJECT_ID(@tableToRebuild)) AND sql_type IN ({q}ADD_FOREIGN_KEY_CONSTRAINT{q},{q}DROP_FOREIGN_KEY_CONSTRAINT{q})
 
 	IF @errors > 0
 	BEGIN
-		PRINT ''ATTENTION: check for the table {table} (or the ''''Results'''' panel), some errors was raised!''
-		SET @sql = ''SELECT * FROM [{schema}].[{table}] WHERE sql_status < 0''
+		PRINT {q}ATTENTION: check for the table {table} (or the {q}{q}Results{q}{q} panel), some errors was raised!{q}
+		SET @sql = {q}SELECT * FROM [{schema}].[{table}] WHERE sql_status < 0{q}
 		EXEC sp_sqlexec @sql
 	END
 		
@@ -594,10 +622,19 @@ END
 '
 
 SET @sql = @comm_create_procedure
+
+if OBJECT_ID(@schema + N'.' + @procedure) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP PROCEDURE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@procedure) + '; PRINT N''Stored Procedure [{schema}].[{procedure}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
-if OBJECT_ID(@schema + N'.' + @procedure) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
+
+if OBJECT_ID(@schema + N'.' + @procedure) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
@@ -610,7 +647,7 @@ BEGIN
 END
 ELSE
 BEGIN
-	PRINT N'WARNING: ' + N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
+	PRINT N'WARNING: '+ N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [uspRebuildTable] PROCEDURE CREATION		*****************************************************************************************************
 
@@ -623,9 +660,9 @@ N'
 create view {schema}.{view} as
 select SCHEMA_NAME(obj.schema_id) as "Schema"
 ,	fkcol.constraint_object_id as "Foreign Key Id", OBJECT_NAME(fkcol.constraint_object_id) as "Foreign Key Name"
-,	fkcol.parent_object_id as "Child Table Id", ''[''+SCHEMA_NAME(tbl_child.schema_id)+'']''+''.''+''[''+OBJECT_NAME(fkcol.parent_object_id)+'']'' as "Child Table Name"
+,	fkcol.parent_object_id as "Child Table Id", {q}[{q}+SCHEMA_NAME(tbl_child.schema_id)+{q}]{q}+{q}.{q}+{q}[{q}+OBJECT_NAME(fkcol.parent_object_id)+{q}]{q} as "Child Table Name"
 ,	fkcol.parent_column_id as "Child Column Id", parent_cols.name as "Child Column Name"
-,	fkcol.referenced_object_id as "Parent Table Id", ''[''+SCHEMA_NAME(tbl_parent.schema_id)+'']''+''.''+''[''+OBJECT_NAME(fkcol.referenced_object_id)+'']'' as "Parent Table Name"
+,	fkcol.referenced_object_id as "Parent Table Id", {q}[{q}+SCHEMA_NAME(tbl_parent.schema_id)+{q}]{q}+{q}.{q}+{q}[{q}+OBJECT_NAME(fkcol.referenced_object_id)+{q}]{q} as "Parent Table Name"
 ,	fkcol.referenced_column_id as "Parent Column Id", referred_cols.name as "Parent Column Name"
 from sys.foreign_key_columns fkcol
 left join sys.all_columns parent_cols on (fkcol.parent_object_id = parent_cols.object_id and fkcol.parent_column_id = parent_cols.column_id)
@@ -638,9 +675,18 @@ left join sys.tables tbl_parent on (tbl_parent.object_id = fkcol.referenced_obje
 '
 
 SET @sql = @comm_create_view_scripts
+
+if OBJECT_ID(@schema + N'.' + @view) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP VIEW ' + QUOTENAME(@schema)+'.'+QUOTENAME(@view) + '; PRINT N''View [{schema}].[{view}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{view}', @view)
-if OBJECT_ID(@schema +'.'+@view) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
+
+if OBJECT_ID(@schema + N'.' + @view) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
@@ -656,7 +702,6 @@ BEGIN
 	PRINT N'WARNING: ' + N'View [' + @schema + N'].[' + @view + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [vForeignKeyCols] VIEW CREATION		*********************************************************************************************************
-
 
 -- ##################################################################################################################################################
 

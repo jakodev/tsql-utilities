@@ -1,4 +1,1 @@
-use IntroToEF6
-go
-
-execute JakodevUtilities.uspDropMe
+execute JdevUtils.uspDropMe @schema='JdevUtils'

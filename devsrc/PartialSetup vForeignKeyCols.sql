@@ -7,9 +7,9 @@ N'
 create view {schema}.{view} as
 select SCHEMA_NAME(obj.schema_id) as "Schema"
 ,	fkcol.constraint_object_id as "Foreign Key Id", OBJECT_NAME(fkcol.constraint_object_id) as "Foreign Key Name"
-,	fkcol.parent_object_id as "Child Table Id", ''[''+SCHEMA_NAME(tbl_child.schema_id)+'']''+''.''+''[''+OBJECT_NAME(fkcol.parent_object_id)+'']'' as "Child Table Name"
+,	fkcol.parent_object_id as "Child Table Id", {q}[{q}+SCHEMA_NAME(tbl_child.schema_id)+{q}]{q}+{q}.{q}+{q}[{q}+OBJECT_NAME(fkcol.parent_object_id)+{q}]{q} as "Child Table Name"
 ,	fkcol.parent_column_id as "Child Column Id", parent_cols.name as "Child Column Name"
-,	fkcol.referenced_object_id as "Parent Table Id", ''[''+SCHEMA_NAME(tbl_parent.schema_id)+'']''+''.''+''[''+OBJECT_NAME(fkcol.referenced_object_id)+'']'' as "Parent Table Name"
+,	fkcol.referenced_object_id as "Parent Table Id", {q}[{q}+SCHEMA_NAME(tbl_parent.schema_id)+{q}]{q}+{q}.{q}+{q}[{q}+OBJECT_NAME(fkcol.referenced_object_id)+{q}]{q} as "Parent Table Name"
 ,	fkcol.referenced_column_id as "Parent Column Id", referred_cols.name as "Parent Column Name"
 from sys.foreign_key_columns fkcol
 left join sys.all_columns parent_cols on (fkcol.parent_object_id = parent_cols.object_id and fkcol.parent_column_id = parent_cols.column_id)
@@ -22,9 +22,18 @@ left join sys.tables tbl_parent on (tbl_parent.object_id = fkcol.referenced_obje
 '
 
 SET @sql = @comm_create_view_scripts
+
+if OBJECT_ID(@schema + N'.' + @view) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP VIEW ' + QUOTENAME(@schema)+'.'+QUOTENAME(@view) + '; PRINT N''View [{schema}].[{view}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{view}', @view)
-if OBJECT_ID(@schema +'.'+@view) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
+
+if OBJECT_ID(@schema + N'.' + @view) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql

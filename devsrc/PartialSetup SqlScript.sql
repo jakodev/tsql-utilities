@@ -20,20 +20,29 @@ CREATE TABLE {schema}.{table}
 	,	sql_type nvarchar(50) not null
 	,	sql_hash nvarchar(100) not null
 	,	sql_status int DEFAULT 0
-	,	sql_status_message nvarchar(500) DEFAULT ''Not executed yet''
+	,	sql_status_message nvarchar(500) DEFAULT {q}Not executed yet{q}
 	,	Timestamp timestamp
 	)
 	
 ALTER TABLE {schema}.{table} ADD CONSTRAINT PK_{table} PRIMARY KEY (sql_hash)
 
 -- add description about column sql_status
-EXEC sys.sp_addextendedproperty @name=N''MS_Description'', @value=N''0=Never Run; 1=Run Successful; -x=Error code'' , @level0type=N''SCHEMA'',@level0name=N''{schema}'', @level1type=N''TABLE'',@level1name=N''{table}'', @level2type=N''COLUMN'',@level2name=N''sql_status''
+EXEC sys.sp_addextendedproperty @name=N{q}MS_Description{q}, @value=N{q}0=Never Run; 1=Run Successful; -x=Error code{q} , @level0type=N{q}SCHEMA{q},@level0name=N{q}{schema}{q}, @level1type=N{q}TABLE{q},@level1name=N{q}{table}{q}, @level2type=N{q}COLUMN{q},@level2name=N{q}sql_status{q}
 '
 
 SET @sql = @comm_create_table_scripts
+
+if OBJECT_ID(@schema +'.'+@tableSqlScripts) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP TABLE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@tableSqlScripts) + '; PRINT N''Table [{schema}].[{table}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
-if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+SET @sql = REPLACE(@sql, N'{q}', '''''')
+
+if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
