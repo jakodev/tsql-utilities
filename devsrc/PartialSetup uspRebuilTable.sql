@@ -6,7 +6,7 @@ N'
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last update:	MAR-2017
--- Version:		0.91.00
+-- Version:		0.92.00
 -- Description:	Dropping and Creation of an existing table and, at the same time, takes care of all the attached foreign keys. 
 -- Goal is performed in 5 steps:
 -- 1) Analisys and saving DDL of all foreign keys;
@@ -75,13 +75,13 @@ BEGIN
 		+		''('' +   STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
 											JOIN sys.all_columns col on (col.column_id = fkcol.parent_column_id and col.object_id = fkcol.parent_object_id) -- child (constraint) fk columns
 											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
-											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
+											FOR XML PATH (N''''), TYPE).value(''.'', ''varchar(max)''), 1, 1, N'''') + '')''
 		+		'' REFERENCES '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.referenced_object_id))
 		-- concatenation of the parent''s (referenced) columns name (STUFF is used to remove the first comma)
 		+		''('' + STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
 											JOIN sys.all_columns col on (col.column_id = fkcol.referenced_column_id and col.object_id = fkcol.referenced_object_id) -- parent (referenced) fk columns
 											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
-											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
+											FOR XML PATH (N''''), TYPE).value(''.'', ''varchar(max)''), 1, 1, N'''') + '')''
 		+		CASE WHEN fk.update_referential_action_desc != ''NO_ACTION'' THEN '' ON UPDATE '' + REPLACE(fk.update_referential_action_desc, ''_'', '' '') ELSE '''' END
 		+		CASE WHEN fk.delete_referential_action_desc != ''NO_ACTION'' THEN '' ON DELETE '' + REPLACE(fk.delete_referential_action_desc, ''_'', '' '') ELSE '''' END COLLATE database_default as "sql_string"
 		,		''ADD_FOREIGN_KEY_CONSTRAINT'' as "sql_type"
@@ -94,21 +94,26 @@ BEGIN
 		SELECT	OBJECT_SCHEMA_NAME(fk.object_id) as "obj_schema"
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
-		,		''ALTER TABLE '' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + ''.'' + OBJECT_NAME(fk.parent_object_id) + '' DROP CONSTRAINT ''+fk.name COLLATE database_default as "sql_string"
+		,		''ALTER TABLE '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.parent_object_id)) + '' DROP CONSTRAINT ''+ QUOTENAME(fk.name) COLLATE database_default as "sql_string"
 		,		''DROP_FOREIGN_KEY_CONSTRAINT'' as sql_type 
 		FROM sys.foreign_keys fk
 		WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
 	) mainquery
 	END TRY
 	BEGIN CATCH
-		SET @returnValue = @returnValue - 1
+		SET @returnValue = -ERROR_NUMBER()
 		DECLARE @err_num INT = ERROR_NUMBER()
 		DECLARE @err_msg NVARCHAR(4000) = ERROR_MESSAGE()
 		PRINT ''Something gone wrong! the insert statement raised the following error:''
 		PRINT ''Error Number:'' + CONVERT( varchar(10), @err_num) + '' - ''+ @err_msg 
-		IF @err_num = 2627
+		IF @err_num = 2627 -- known issue, not a real problem
+		BEGIN
 			PRINT ''Maybe you''''ve run this procedure in debug mode more than once without reset the environment between the first and the last execution''
 			PRINT ''''
+			@returnValue = 0
+		END
+		ELSE
+			RETURN @returnValue
 	END CATCH
 	-- < (1) ANALISYS AND SAVING FK''s DDL **********************************************************************************************************
 
@@ -138,8 +143,9 @@ BEGIN
 				PRINT ''Table '' + @tableToRebuild + '' has been dropped successful!''
 			END TRY
 			BEGIN CATCH
-				SET @returnValue = @returnValue - 1
+				SET @returnValue = -ERROR_NUMBER()
 				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
+				RETURN @returnValue
 			END CATCH
 		END	
 		ELSE
@@ -159,8 +165,9 @@ BEGIN
 				PRINT ''Table '' + @tableToRebuild + '' has been created successful!''
 			END TRY
 			BEGIN CATCH
-				SET @returnValue = @returnValue - 1
+				SET @returnValue = -ERROR_NUMBER()
 				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
+				RETURN @returnValue
 			END CATCH
 		END
 		ELSE
