@@ -6,22 +6,22 @@
 -- Last Update: MAR-2017
 -- Version:		0.92.00
 -- Description:	
-I've begun this tiny program to easily handle the DROP/CREATE TABLE procedure when one o more Foreign Keys are referencing to it. So, to accomplish this
-task I need to add some items like tables, functions, stored procedures etc.. in the target database. And that is what this setup script do
+I've begun this tiny program to easily handle the DROP/CREATE TABLE procedure when one or more Foreign Keys are referencing to it. So, to accomplish this
+task in a reliable way I have to add some objects like tables, functions, stored procedures etc.. in the target database. And that is what this setup script do
 
-Add a new schema named as the variable @schema (customizable) to the <current database> (DB_NAME()).
-Into this new schema add the following items:
-- A new table named [SqlScript], used to save the sql scripts to be executed;
-- A new stored procedure named [uspExecScriptsByKeys], used to run the scripts saved in @tbl_scripts;
+Add a new schema named as the variable @schema (customizable) to the <current database>.
+Into this new schema the script add the these items:
+- A new table named @tableSqlScripts [SqlScript], used to save the sql scripts to be executed;
+- A new stored procedure named [uspExecScriptsByKeys], used to run the scripts saved in @tableSqlScripts;
 - A new stored procedure named [uspDropMe], used to delete all the items beloging to this schema, and the schema itself, in order to clean your database;
-- A new stored procedure named [uspReset], used to truncate the table SqlScript;
-- A new stored procedure named [uspRebuildTable], used to rebuild your table and at the same time take care of all the referenced foreign keys
+- A new stored procedure named [uspReset], used to reset/truncate the table @tableSqlScripts;
+- A new stored procedure named [uspRebuildTable], used to rebuild your table and at the same time take care of all the referenced foreign keys;
 - A new view named vForeignKeyCols, for consulting purpose only;
 */
 -- ==================================================================================================================================================
 
--- You can choose your preferred name (remember this choice) or use the default name
-DECLARE @schema nvarchar(128) = N'JakodevUtilities'
+-- You can choose your preferred name (remember this choice for using the provided exec_ scripts) or use the default name
+DECLARE @schema nvarchar(128) = N'JdevUtils'
 
 
 -- ##################################################################################################################################################
@@ -29,7 +29,7 @@ DECLARE @sql nvarchar(max)
 DECLARE @procedure nvarchar(128)
 DECLARE @view nvarchar(128)
 DECLARE @tableSqlScripts nvarchar(50) = N'SqlScript'
-DECLARE @forceItemCreation bit = 'false'	-- <da implementare>!!
+DECLARE @replaceItem bit = 'true'	-- <to do>!!
 
 DECLARE @comm_create_function nvarchar(max)
 DECLARE @comm_create_procedure nvarchar(max)
@@ -40,6 +40,7 @@ DECLARE @comm_create_schema varchar(50) = N'CREATE  SCHEMA {schema}'
 
 SET @sql = @comm_create_schema
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
+
 if SCHEMA_ID(@schema) is null
 BEGIN
 	BEGIN TRY
@@ -55,9 +56,10 @@ ELSE
 BEGIN
 	PRINT N'WARNING: ' + N'Schema [' + @schema + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
+
 -- < [@schema] SCHEMA CREATION		*****************************************************************************************************************
 
--- > [@tbl_scripts] TABLE CREATION		*************************************************************************************************************
+-- > [@tableSqlScripts] TABLE CREATION		*********************************************************************************************************
 DECLARE @comm_create_table_scripts varchar(max)
 
 SET @comm_create_table_scripts = 
@@ -90,9 +92,17 @@ EXEC sys.sp_addextendedproperty @name=N''MS_Description'', @value=N''0=Never Run
 '
 
 SET @sql = @comm_create_table_scripts
+
+if OBJECT_ID(@schema +'.'+@tableSqlScripts) is not null AND @replaceItem = 'true'
+BEGIN
+	SET @sql = 'DROP TABLE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@tableSqlScripts) + '; PRINT N''Table [{schema}].[{table}] has been dropped from the [{database}] database.''; ' + @sql
+END
+
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
-if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null
+SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
+
+if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
@@ -107,7 +117,7 @@ ELSE
 BEGIN
 	PRINT N'WARNING: ' + N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
--- < [@tbl_scripts] TABLE CREATION		*************************************************************************************************************
+-- < [@tableSqlScripts] TABLE CREATION		*********************************************************************************************************
 
 -- > [uspExecScriptsByKeys] PROCEDURE CREATION		*************************************************************************************************
 SET @procedure = N'uspExecScriptsByKeys'
@@ -378,7 +388,7 @@ N'
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last update:	MAR-2017
--- Version:		0.91.00
+-- Version:		0.92.00
 -- Description:	Dropping and Creation of an existing table and, at the same time, takes care of all the attached foreign keys. 
 -- Goal is performed in 5 steps:
 -- 1) Analisys and saving DDL of all foreign keys;
@@ -447,13 +457,13 @@ BEGIN
 		+		''('' +   STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
 											JOIN sys.all_columns col on (col.column_id = fkcol.parent_column_id and col.object_id = fkcol.parent_object_id) -- child (constraint) fk columns
 											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
-											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
+											FOR XML PATH (N''''), TYPE).value(''.'', ''varchar(max)''), 1, 1, N'''') + '')''
 		+		'' REFERENCES '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.referenced_object_id))
 		-- concatenation of the parent''s (referenced) columns name (STUFF is used to remove the first comma)
 		+		''('' + STUFF ((SELECT '','' + QUOTENAME(col.name) FROM sys.foreign_key_columns fkcol
 											JOIN sys.all_columns col on (col.column_id = fkcol.referenced_column_id and col.object_id = fkcol.referenced_object_id) -- parent (referenced) fk columns
 											WHERE constraint_object_id = fk.object_id order by fkcol.parent_column_id
-											FOR XML PATH (N'''')), 1, 1, N'''') + '')''
+											FOR XML PATH (N''''), TYPE).value(''.'', ''varchar(max)''), 1, 1, N'''') + '')''
 		+		CASE WHEN fk.update_referential_action_desc != ''NO_ACTION'' THEN '' ON UPDATE '' + REPLACE(fk.update_referential_action_desc, ''_'', '' '') ELSE '''' END
 		+		CASE WHEN fk.delete_referential_action_desc != ''NO_ACTION'' THEN '' ON DELETE '' + REPLACE(fk.delete_referential_action_desc, ''_'', '' '') ELSE '''' END COLLATE database_default as "sql_string"
 		,		''ADD_FOREIGN_KEY_CONSTRAINT'' as "sql_type"
@@ -466,21 +476,26 @@ BEGIN
 		SELECT	OBJECT_SCHEMA_NAME(fk.object_id) as "obj_schema"
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
-		,		''ALTER TABLE '' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + ''.'' + OBJECT_NAME(fk.parent_object_id) + '' DROP CONSTRAINT ''+fk.name COLLATE database_default as "sql_string"
+		,		''ALTER TABLE '' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id)) + ''.'' + QUOTENAME(OBJECT_NAME(fk.parent_object_id)) + '' DROP CONSTRAINT ''+ QUOTENAME(fk.name) COLLATE database_default as "sql_string"
 		,		''DROP_FOREIGN_KEY_CONSTRAINT'' as sql_type 
 		FROM sys.foreign_keys fk
 		WHERE fk.referenced_object_id = OBJECT_ID(@tableToRebuild) or fk.parent_object_id = OBJECT_ID(@tableToRebuild)
 	) mainquery
 	END TRY
 	BEGIN CATCH
-		SET @returnValue = @returnValue - 1
+		SET @returnValue = -ERROR_NUMBER()
 		DECLARE @err_num INT = ERROR_NUMBER()
 		DECLARE @err_msg NVARCHAR(4000) = ERROR_MESSAGE()
 		PRINT ''Something gone wrong! the insert statement raised the following error:''
 		PRINT ''Error Number:'' + CONVERT( varchar(10), @err_num) + '' - ''+ @err_msg 
-		IF @err_num = 2627
+		IF @err_num = 2627 -- known issue, not a real problem
+		BEGIN
 			PRINT ''Maybe you''''ve run this procedure in debug mode more than once without reset the environment between the first and the last execution''
 			PRINT ''''
+			@returnValue = 0
+		END
+		ELSE
+			RETURN @returnValue
 	END CATCH
 	-- < (1) ANALISYS AND SAVING FK''s DDL **********************************************************************************************************
 
@@ -510,8 +525,9 @@ BEGIN
 				PRINT ''Table '' + @tableToRebuild + '' has been dropped successful!''
 			END TRY
 			BEGIN CATCH
-				SET @returnValue = @returnValue - 1
+				SET @returnValue = -ERROR_NUMBER()
 				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
+				RETURN @returnValue
 			END CATCH
 		END	
 		ELSE
@@ -531,8 +547,9 @@ BEGIN
 				PRINT ''Table '' + @tableToRebuild + '' has been created successful!''
 			END TRY
 			BEGIN CATCH
-				SET @returnValue = @returnValue - 1
+				SET @returnValue = -ERROR_NUMBER()
 				PRINT ''SQLERROR-'' + CONVERT( varchar(10), ERROR_NUMBER()) + '': '' + ERROR_MESSAGE()
+				RETURN @returnValue
 			END CATCH
 		END
 		ELSE
