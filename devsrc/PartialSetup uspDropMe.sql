@@ -21,7 +21,14 @@ BEGIN
 
 	DECLARE @object_name varchar(128)
 	DECLARE @object_type varchar(2)
+	DECLARE @object_type_desc varchar(20)
 	DECLARE @sql varchar(max)
+
+	DECLARE @myarray table (id varchar(2), sqlstring varchar(100), typedesc varchar(20))
+	INSERT INTO @myarray VALUES ({q}FN{q}, {q}DROP FUNCTION {schema}.{object}{q}, {q}Function{q}) 
+	INSERT INTO @myarray VALUES ({q}P{q}, {q}DROP PROCEDURE {schema}.{object}{q}, {q}Stored Procedure{q})
+	INSERT INTO @myarray VALUES ({q}U{q}, {q}DROP TABLE {schema}.{object}{q}, {q}Table{q})
+	INSERT INTO @myarray VALUES ({q}V{q}, {q}DROP VIEW {schema}.{object}{q}, {q}View{q})
 
 	DECLARE drop_cursor CURSOR FOR select name, type from sys.objects where SCHEMA_NAME(schema_id) = @schema and type in ({q}FN{q}, {q}P{q}, {q}U{q}, {q}V{q})
 
@@ -40,21 +47,14 @@ BEGIN
 	WHILE (@@FETCH_STATUS = 0)
 	BEGIN
 
-		SET @sql =
-			CASE @object_type
-				WHEN {q}FN{q} THEN {q}DROP FUNCTION {schema}.{object}{q}
-				WHEN {q}P{q} THEN {q}DROP PROCEDURE {schema}.{object}{q}
-				WHEN {q}U{q} THEN {q}DROP TABLE {schema}.{object}{q}
-				WHEN {q}V{q} THEN {q}DROP VIEW {schema}.{object}{q}
-				ELSE null
-			END
+		SELECT @sql = sqlstring, @object_type_desc = typedesc FROM @myarray WHERE id = @object_type
 
 		IF @sql is not null
 			BEGIN
 				SET @sql = REPLACE(@sql, {q}{schema}{q}, @schema)
 				SET @sql = REPLACE(@sql, {q}{object}{q}, @object_name)
 				EXEC sp_sqlexec @sql
-				PRINT {q}OBJECT {q} + @schema +{q}.{q}+@object_name + {q} dropped!{q}
+				PRINT @object_type_desc + {q} {q} + QUOTENAME(@schema) +{q}.{q}+QUOTENAME(@object_name) + {q} has been dropped from {q} + QUOTENAME(DB_NAME()) + {q} database.{q}
 			END	
 
 		FETCH NEXT FROM drop_cursor INTO @object_name, @object_type
@@ -80,12 +80,15 @@ SET @sql = @comm_create_procedure
 if OBJECT_ID(@schema + N'.' + @procedure) is not null AND @replaceItem = 'true'
 BEGIN
 	SET @sql = 'DROP PROCEDURE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@procedure) + '; PRINT N''Stored Procedure [{schema}].[{procedure}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+	SET @sql = REPLACE(@sql, N'{q}', '''''') -- four quote because it's an exec of exec
 END
-
+ELSE
+	SET @sql = REPLACE(@sql, N'{q}', '''') -- two quote
+	
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
 SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
-SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
+
 
 if OBJECT_ID(@schema + N'.' + @procedure) is null OR @replaceItem = 'true'
 BEGIN

@@ -88,13 +88,15 @@ SET @sql = @comm_create_procedure
 if OBJECT_ID(@schema + N'.' + @procedure) is not null AND @replaceItem = 'true'
 BEGIN
 	SET @sql = 'DROP PROCEDURE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@procedure) + '; PRINT N''Stored Procedure [{schema}].[{procedure}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+	SET @sql = REPLACE(@sql, N'{q}', '''''') -- four quote because it's an exec of exec
 END
+ELSE
+	SET @sql = REPLACE(@sql, N'{q}', '''') -- two quote
 
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{procedure}', @procedure)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
 SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
-SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
 
 if OBJECT_ID(@schema + N'.' + @procedure) is null OR @replaceItem = 'true'
 BEGIN

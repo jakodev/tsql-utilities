@@ -26,12 +26,14 @@ SET @sql = @comm_create_view_scripts
 if OBJECT_ID(@schema + N'.' + @view) is not null AND @replaceItem = 'true'
 BEGIN
 	SET @sql = 'DROP VIEW ' + QUOTENAME(@schema)+'.'+QUOTENAME(@view) + '; PRINT N''View [{schema}].[{view}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
+	SET @sql = REPLACE(@sql, N'{q}', '''''') -- four quote because it's an exec of exec
 END
-
+ELSE
+	SET @sql = REPLACE(@sql, N'{q}', '''') -- two quote
+	
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{view}', @view)
 SET @sql = REPLACE(@sql, N'{database}', DB_NAME())
-SET @sql = REPLACE(@sql, N'{q}', '''''') -- double quote because it's an exec of exec
 
 if OBJECT_ID(@schema + N'.' + @view) is null OR @replaceItem = 'true'
 BEGIN
