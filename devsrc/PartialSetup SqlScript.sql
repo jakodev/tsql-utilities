@@ -1,13 +1,14 @@
 -- > [@tableSqlScripts] TABLE CREATION		*********************************************************************************************************
 DECLARE @comm_create_table_scripts varchar(max)
 
+SET @itemVersion = @version
 SET @comm_create_table_scripts = 
 N'
 -- =============================================
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last update:	FEB-2017
--- Version:		0.91.00
+-- Version:		'+@itemVersion+'
 -- Description:	Table used to store sql script to be executed
 -- =============================================
 
@@ -49,7 +50,7 @@ if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] has been created in the [' + DB_NAME() + N'] database.'
+		PRINT N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] v' + @itemVersion + ' has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
 		PRINT N'ERROR: ' + N'Cannot create the Table [' + @schema + N'].[' + @tableSqlScripts + N'] in the [' + DB_NAME() + N'] database!!'

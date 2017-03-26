@@ -11,14 +11,13 @@ N'
 -- =============================================
 
 CREATE PROCEDURE {schema}.{procedure}
-(
-	@schema varchar(128) = {q}{schema}{q}
-)
 
 AS
 
 BEGIN
-
+	
+	SET NOCOUNT ON
+	DECLARE @schema varchar(128) = OBJECT_SCHEMA_NAME(@@PROCID)
 	DECLARE @object_name varchar(128)
 	DECLARE @object_type varchar(2)
 	DECLARE @object_type_desc varchar(20)
@@ -69,7 +68,7 @@ BEGIN
 			SET @sql = {q}DROP SCHEMA {schema}{q}
 			SET @sql = REPLACE(@sql, {q}{schema}{q}, @schema)
 			EXEC sp_sqlexec @sql
-			PRINT {q}SCHEMA {q} + @schema + {q} dropped!{q}
+			PRINT {q}SCHEMA {q} + QUOTENAME(@schema) + {q} dropped!{q}
 		END
 		
 END

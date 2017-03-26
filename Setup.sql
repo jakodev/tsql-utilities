@@ -1,10 +1,10 @@
 -- ================================================================================================================================================
 /*
--- Name: JAKODEV-UTILITIES
+-- Name: T-SQL Utilities
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last Update: MAR-2017
--- Version:		0.92.00
+-- Version:		0.93.00
 -- Description:	
 I've begun this tiny program to easily handle the DROP/CREATE TABLE procedure when one or more Foreign Keys are referencing to it. So, to accomplish this
 task in a reliable way I have to add some objects like tables, functions, stored procedures etc.. in the target database. And that is what this setup script do
@@ -25,11 +25,15 @@ DECLARE @schema nvarchar(128) = N'JdevUtils'
 
 
 -- ##################################################################################################################################################
-DECLARE @sql nvarchar(max)
-DECLARE @procedure nvarchar(128)
-DECLARE @view nvarchar(128)
-DECLARE @tableSqlScripts nvarchar(50) = N'SqlScript'
-DECLARE @replaceItem bit = 'true'	-- <to do>!!
+DECLARE @version varchar(10) = '0.93.00'	-- Application Version
+DECLARE @itemVersion varchar(10)			-- version of each item for PRINT purpose
+DECLARE @sql nvarchar(max)					-- used to perform all items creation
+DECLARE @procedure nvarchar(128)			-- variable used to name each procedure
+DECLARE @view nvarchar(128)					-- variable used to name each view
+DECLARE @tableSqlScripts nvarchar(50) = N'SqlScript' 
+DECLARE @replaceItem bit = 'true'			-- force drop create items
+DECLARE @warnCounter int -- <warning counter that affect last PRINT - TO DO!>
+DECLARE @errCounter int -- <error counter that affect last PRINT - TO DO!>
 
 DECLARE @comm_create_function nvarchar(max)
 DECLARE @comm_create_procedure nvarchar(max)
@@ -56,19 +60,19 @@ ELSE
 BEGIN
 	PRINT N'WARNING: ' + N'Schema [' + @schema + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
-
 -- < [@schema] SCHEMA CREATION		*****************************************************************************************************************
 
 -- > [@tableSqlScripts] TABLE CREATION		*********************************************************************************************************
 DECLARE @comm_create_table_scripts varchar(max)
 
+SET @itemVersion = @version
 SET @comm_create_table_scripts = 
 N'
 -- =============================================
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last update:	FEB-2017
--- Version:		0.91.00
+-- Version:		'+@itemVersion+'
 -- Description:	Table used to store sql script to be executed
 -- =============================================
 
@@ -96,10 +100,10 @@ SET @sql = @comm_create_table_scripts
 if OBJECT_ID(@schema +'.'+@tableSqlScripts) is not null AND @replaceItem = 'true'
 BEGIN
 	SET @sql = 'DROP TABLE ' + QUOTENAME(@schema)+'.'+QUOTENAME(@tableSqlScripts) + '; PRINT N''Table [{schema}].[{table}] has been dropped from the [{database}] database.''; EXEC sp_sqlexec N''' + @sql + ''''
-	SET @sql = REPLACE(@sql, N'{q}', '''''')
+	SET @sql = REPLACE(@sql, N'{q}', '''''') -- four quote because it's an exec of exec
 END
 ELSE
-	SET @sql = REPLACE(@sql, N'{q}', '''')
+	SET @sql = REPLACE(@sql, N'{q}', '''') -- two quote
 
 SET @sql = REPLACE(@sql, N'{schema}', @schema)
 SET @sql = REPLACE(@sql, N'{table}', @tableSqlScripts)
@@ -110,7 +114,7 @@ if OBJECT_ID(@schema +'.'+@tableSqlScripts) is null OR @replaceItem = 'true'
 BEGIN
 	BEGIN TRY
 		EXEC sp_sqlexec @sql
-		PRINT N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] has been created in the [' + DB_NAME() + N'] database.'
+		PRINT N'Table [' + @schema + N'].[' + @tableSqlScripts + N'] v' + @itemVersion + ' has been created in the [' + DB_NAME() + N'] database.'
 	END TRY
 	BEGIN CATCH
 		PRINT N'ERROR: ' + N'Cannot create the Table [' + @schema + N'].[' + @tableSqlScripts + N'] in the [' + DB_NAME() + N'] database!!'
@@ -253,14 +257,13 @@ N'
 -- =============================================
 
 CREATE PROCEDURE {schema}.{procedure}
-(
-	@schema varchar(128) = {q}{schema}{q}
-)
 
 AS
 
 BEGIN
-
+	
+	SET NOCOUNT ON
+	DECLARE @schema varchar(128) = OBJECT_SCHEMA_NAME(@@PROCID)
 	DECLARE @object_name varchar(128)
 	DECLARE @object_type varchar(2)
 	DECLARE @object_type_desc varchar(20)
@@ -311,7 +314,7 @@ BEGIN
 			SET @sql = {q}DROP SCHEMA {schema}{q}
 			SET @sql = REPLACE(@sql, {q}{schema}{q}, @schema)
 			EXEC sp_sqlexec @sql
-			PRINT {q}SCHEMA {q} + @schema + {q} dropped!{q}
+			PRINT {q}SCHEMA {q} + QUOTENAME(@schema) + {q} dropped!{q}
 		END
 		
 END
@@ -348,7 +351,6 @@ BEGIN
 	PRINT N'WARNING: ' + N'Stored Procedure [' + @schema + N'].[' + @procedure + N'] has not been created because was already present in [' + DB_NAME() + N'] database.'
 END
 -- < [uspDropMe] PROCEDURE CREATION		*************************************************************************************************************
-
 
 -- > [uspReset] PROCEDURE CREATION		*************************************************************************************************************
 SET @procedure = N'uspReset'
@@ -722,4 +724,5 @@ END
 -- ##################################################################################################################################################
 
 
-
+PRINT N''
+PRINT N'Congratulations! T-SQL Utilities v'+@version+' has been installed successfully!'
