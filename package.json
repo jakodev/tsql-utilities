@@ -1,0 +1,32 @@
+{
+  "name": "tsqlutilities",
+  "version": "0.93.0",
+  "description": "A series of T-SQL utilities",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jakodev/tsql-utilities.git"
+  },
+  "keywords": [
+    "T-SQL",
+    "SQL",
+    "SERVER",
+    "Database"
+  ],
+  "author": "Jakodev",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jakodev/tsql-utilities/issues"
+  },
+  "homepage": "https://github.com/jakodev/tsql-utilities#readme",
+  "dependencies": {
+    "gulp": "^3.9.1",
+    "gulp-concat-multi": "^1.0.1"
+  }
+}

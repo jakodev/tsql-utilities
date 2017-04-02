@@ -1,1 +1,1 @@
-execute JdevUtils.uspDropMe @schema='JdevUtils'
+execute JdevUtils.uspDropMe
