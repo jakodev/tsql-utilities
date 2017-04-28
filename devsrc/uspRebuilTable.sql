@@ -6,7 +6,7 @@ N'
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last update:	MAR-2017
--- Version:		0.92.01
+-- Version:		0.92.02
 -- Description:	Dropping and Creation of an existing table and, at the same time, takes care of all the attached foreign keys. 
 -- Goal is performed in 5 steps:
 -- 1) Analisys and saving DDL of all foreign keys;
