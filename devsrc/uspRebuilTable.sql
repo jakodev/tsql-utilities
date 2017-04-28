@@ -48,7 +48,7 @@ BEGIN
 	END
 	
 	DECLARE @sql varchar(max)
-	DECLARE @tableToRebuild varchar(384) = DB_NAME() + {q}.{q} + @schema + {q}.{q} + @table	
+	DECLARE @tableToRebuild varchar(384) = QUOTENAME(DB_NAME()) + {q}.{q} + QUOTENAME(@schema) + {q}.{q} + QUOTENAME(@table)
 	DECLARE @comm_create_table varchar(max) = N{q}CREATE TABLE {usp_table} ({q} + @DDL + {q}){q}
 	DECLARE @returnValue int = 0
 	
@@ -67,6 +67,7 @@ BEGIN
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
 		,		{q}ALTER TABLE {q} + QUOTENAME(OBJECT_SCHEMA_NAME(fk.object_id))+{q}.{q}+ QUOTENAME(OBJECT_NAME(fk.parent_object_id))
+		+		CASE WHEN fk.is_not_trusted = {q}1{q} THEN {q} WITH NOCHECK {q} ELSE {q}{q} END
 		+		{q} ADD CONSTRAINT {q} + QUOTENAME(OBJECT_NAME(object_id))
 		+		{q} FOREIGN KEY{q} 
 		-- concatenation of the child{q}s (constraint) columns name (STUFF is used to remove the first comma)
