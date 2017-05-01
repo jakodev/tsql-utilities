@@ -2,7 +2,7 @@ var gulp = require('gulp');
 var concat = require('gulp-concat-multi');
 
 gulp.task('default', function() {
-    console.log('<default not implemented>');
+    gulp.start('concat_dev_scripts');
 })
 
 gulp.task('concat_dev_scripts', function() {
@@ -27,9 +27,8 @@ gulp.task('concat_dev_scripts', function() {
     for (i = 0; i<concatFiles.length; i++) {
         console.log(concatFiles[i]);
     }
-    
+    console.log('Setup.sql file has been generated!');
     console.log('...End concatenation.');
 });
 
 
-gulp.start('concat_dev_scripts');

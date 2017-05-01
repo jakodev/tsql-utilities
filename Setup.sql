@@ -362,7 +362,7 @@ N'
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last update:	MAR-2017
--- Version:		0.92.00
+-- Version:		0.92.03
 -- Description:	Dropping and Creation of an existing table and, at the same time, takes care of all the attached foreign keys. 
 -- Goal is performed in 5 steps:
 -- 1) Analisys and saving DDL of all foreign keys;
@@ -372,8 +372,7 @@ N'
 -- 5) Creation of the Foreign Keys saved before;
 
 
--- Params:	@database (optional): the database where reside the table to rebuild;
---			@schema: the schema of the table;
+-- Params:	@schema: the schema of the table;
 --			@table: the table to rebuild;
 --			@DDL: Columns DDL (you must provide only the DDL to add the columns)
 --			@debugMode: allow only two values	> {q}true{q}, no drop performed. To use for checking if all the necessary scripts will be generated;
@@ -382,7 +381,6 @@ N'
 
 CREATE PROCEDURE {schema}.{procedure}
 
-	@database varchar(128) = NULL, -- NULL means current database
 	@schema varchar(128),
 	@table varchar(128),
 	@DDL varchar(max),
@@ -406,7 +404,7 @@ BEGIN
 	END
 	
 	DECLARE @sql varchar(max)
-	DECLARE @tableToRebuild varchar(384) = COALESCE(@database, DB_NAME()) + {q}.{q} + @schema + {q}.{q} + @table	
+	DECLARE @tableToRebuild varchar(384) = QUOTENAME(DB_NAME()) + {q}.{q} + QUOTENAME(@schema) + {q}.{q} + QUOTENAME(@table)
 	DECLARE @comm_create_table varchar(max) = N{q}CREATE TABLE {usp_table} ({q} + @DDL + {q}){q}
 	DECLARE @returnValue int = 0
 	
@@ -425,6 +423,7 @@ BEGIN
 		,		OBJECT_NAME(fk.parent_object_id) as "obj_name"
 		,		OBJECT_NAME(OBJECT_ID(@tableToRebuild)) as "sql_key"
 		,		{q}ALTER TABLE {q} + QUOTENAME(OBJECT_SCHEMA_NAME(fk.object_id))+{q}.{q}+ QUOTENAME(OBJECT_NAME(fk.parent_object_id))
+		+		CASE WHEN fk.is_not_trusted = {q}1{q} THEN {q} WITH NOCHECK {q} ELSE {q}{q} END
 		+		{q} ADD CONSTRAINT {q} + QUOTENAME(OBJECT_NAME(object_id))
 		+		{q} FOREIGN KEY{q} 
 		-- concatenation of the child{q}s (constraint) columns name (STUFF is used to remove the first comma)
@@ -464,7 +463,7 @@ BEGIN
 		PRINT {q}Error Number:{q} + CONVERT( varchar(10), @err_num) + {q} - {q}+ @err_msg 
 		IF @err_num = 2627 -- known issue, not a real problem
 		BEGIN
-			PRINT {q}Maybe you{q}{q}ve run this procedure in debug mode more than once without reset the environment between the first and the last execution{q}
+			PRINT {q}Maybe you{q}{q}ve run this procedure more than once without reset the environment. Next time set {q}{q}R{q}{q} or {q}{q}T{q}{q} on @runResetBefore {q}
 			PRINT {q}{q}
 			SET @returnValue = 0
 		END
