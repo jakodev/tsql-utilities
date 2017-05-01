@@ -25,7 +25,7 @@ All the objects (procedures, tables, etc..) will be installed into an independen
 	- 1 schema
 		* [JdevUtils] *(customizable)*
     -   1 table
-        * [SqlScripts]
+        * [SqlScript]
     -   4 stored procedures
         * [uspExecScriptsByKeys]
         * [uspDropMe]
@@ -37,10 +37,10 @@ All the objects (procedures, tables, etc..) will be installed into an independen
 ## Uninstall ##
 To clean your database simply use the script `exec_uspDropMe.sql` or call directly the procedure `[JdevUtils].[uspDropMe]`. Every objects belonging to the schema `[JdevUtils]` and the **SCHEMA itself** will be removed.
 
-**NOTE**: if during the installation you have changed the default name of the SCHEMA remember your choice in this step.++
+**NOTE**: if during the installation you have changed the default name of the SCHEMA remember your choice in this step.
 
 ## Configuration ##
-All the objects (procedures, tables, etc..) will be installed under the **SCHEMA** `[JdevUtils]`, so you can remove them easily when you don't need anymore. As I've said above, The **SCHEMA** name is customizable, so you can renamed as you wan. To do that set your desired name to the variable `@schema` in the `Setup.sql` file:
+All the objects (procedures, tables, etc..) will be installed under the **SCHEMA** `[JdevUtils]`, so you can remove them easily when you don't need anymore. As I've said above, The **SCHEMA** name is customizable, so you can rename as you want. To do that set your desired name to the variable `@schema` in the `Setup.sql` file:
 ```sql 
 DECLARE @schema nvarchar(128) = N'JdevUtils'
 ```
@@ -49,9 +49,9 @@ If you change this default SCHEMA name remember your choice when you will use th
 </span>**
 
 ## Database configuration ##
-User should have `[db_owner]` role or at least rights to CREATE SCHEMA, PROCEDURE, VIEWS, FUNCTIONS, DROP/CREATE/ALTER TABLES.
+User should have `[db_owner]` role or at least rights to create: SCHEMA, PROCEDURE, VIEWS, FUNCTIONS, DROP/CREATE/ALTER TABLES.
 
-The database don't need any particular settings, but for your information I've developed and tested with:
+The database doesn't need any particular settings, but for your information I've developed and tested with:
 - SQL SERVER 2014 on Windows 7 SP1 (VM VirtualBox)
 - SQL SERVER vNEXT on Ubuntu 16.04 (Virtualized with Vagrant + Virtual Box)
 - SQL SERVER MANAGEMENT STUDIO 2014
@@ -77,7 +77,7 @@ You have to configure some variables in this file before to start:
 		- 'R' = Set the status 0 to all the scripts contained
 	* @myschema : The schema which contains the table to rebuild
 	* @mytable : The table to rebuild
-	* @myddl : should contains only the DDL of colums, primary key and unique contraints
+	* @myddl : should contains only the DDL of columns, primary key and unique contraints
 
 
 See the following example:
