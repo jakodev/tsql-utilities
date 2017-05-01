@@ -6,7 +6,7 @@ N'
 -- Author:		Jakodev
 -- Create date: JAN-2017
 -- Last update:	MAR-2017
--- Version:		0.92.02
+-- Version:		0.92.03
 -- Description:	Dropping and Creation of an existing table and, at the same time, takes care of all the attached foreign keys. 
 -- Goal is performed in 5 steps:
 -- 1) Analisys and saving DDL of all foreign keys;
@@ -107,7 +107,7 @@ BEGIN
 		PRINT {q}Error Number:{q} + CONVERT( varchar(10), @err_num) + {q} - {q}+ @err_msg 
 		IF @err_num = 2627 -- known issue, not a real problem
 		BEGIN
-			PRINT {q}Maybe you{q}{q}ve run this procedure in debug mode more than once without reset the environment between the first and the last execution{q}
+			PRINT {q}Maybe you{q}{q}ve run this procedure more than once without reset the environment. Next time set {q}{q}R{q}{q} or {q}{q}T{q}{q} on @runResetBefore {q}
 			PRINT {q}{q}
 			SET @returnValue = 0
 		END
