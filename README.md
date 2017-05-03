@@ -1,8 +1,8 @@
 # README #
 
-I've begun this tiny program to easily handle the *drop and recreate* procedure of a **Table** referenced by one or more **Foreign Keys**. I got carried away and, instead of develop a single easy query, I've developed a *T-SQL based infrastructure* for implement future requirements in a reliable way. Maybe I will not anyway, who knows ;)
+I've begun this small program to easily handle the *re-creation of a table* referenced by one or more **Foreign Keys**. I got carried away and, instead of develop a single easy query, I've developed a *T-SQL based infrastructure* for implement future requirements in a reliable way. Maybe I will not anyway, who knows ;)
 
-For this reason this project seems to big for handling only *table drop and recreate* when some *foreign keys* are in the middle.
+For this reason this project seems too big for handling only the *re-creation of a table* when some *foreign keys* are concerned.
 
 
 ## Getting Started ##
@@ -54,8 +54,7 @@ User should have `[db_owner]` role or at least rights to create: SCHEMA, PROCEDU
 The database doesn't need any particular settings, but for your information I've developed and tested with:
 - SQL SERVER 2014 on Windows 7 SP1 (VM VirtualBox)
 - SQL SERVER vNEXT on Ubuntu 16.04 (Virtualized with Vagrant + Virtual Box)
-- SQL SERVER MANAGEMENT STUDIO 2014
-- SQL SERVER MANAGEMENT STUDIO 2017
+- SSMS 2014 and 2017
 
 *Unfortunately I didn't test other mssql versions, but let me know if something don't work in one of them.*
 
